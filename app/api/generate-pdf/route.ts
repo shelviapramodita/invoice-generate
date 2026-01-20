@@ -17,8 +17,10 @@ export async function POST(request: NextRequest) {
         }
 
         // Generate PDFs
+        // Parse date with noon time to avoid timezone shift issues
+        const parsedDate = new Date(invoiceDate + 'T12:00:00')
         const pdfs = await generateInvoicePDFsWithNumbers(parsedData as ParsedExcelData, {
-            invoiceDate: new Date(invoiceDate),
+            invoiceDate: parsedDate,
             batchName,
             invoiceNumbers,
         })
@@ -40,7 +42,7 @@ export async function POST(request: NextRequest) {
         console.log('[API] Saving invoice to database...')
         const invoiceHistory = await createInvoiceHistory({
             batch_name: batchName || undefined,
-            invoice_date: new Date(invoiceDate),
+            invoice_date: parsedDate,
             total_suppliers: suppliers.length,
             total_items: totalItems,
             grand_total: grandTotal,

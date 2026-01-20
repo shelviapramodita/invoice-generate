@@ -54,7 +54,8 @@ export default function UploadPage() {
                 },
                 body: JSON.stringify({
                     parsedData,
-                    invoiceDate: invoiceDate.toISOString(),
+                    // Send local date as YYYY-MM-DD to avoid timezone issues
+                    invoiceDate: format(invoiceDate, 'yyyy-MM-dd'),
                     batchName: batchName || undefined,
                     invoiceNumbers,
                 }),
