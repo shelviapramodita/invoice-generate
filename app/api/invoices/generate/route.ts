@@ -78,7 +78,6 @@ export async function POST(request: NextRequest) {
         const invoiceHistory = await createInvoiceHistory({
             batch_name: batchName || undefined,
             invoice_date: invoiceDate,
-            excel_file_path: excelPath,
             total_suppliers: summary.suppliers.length,
             total_items: summary.totalItems,
             grand_total: summary.grandTotal,

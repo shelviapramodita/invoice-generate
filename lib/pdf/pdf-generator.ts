@@ -136,10 +136,10 @@ export function downloadPDF(blob: Blob, filename: string) {
  */
 export async function mergePDFs(pdfs: GeneratedPDF[], filename: string): Promise<void> {
     const { PDFDocument } = await import('pdf-lib')
-    
+
     // Create a new PDF document
     const mergedPdf = await PDFDocument.create()
-    
+
     // Add each PDF to the merged document
     for (const pdf of pdfs) {
         const pdfBytes = await pdf.blob.arrayBuffer()
@@ -147,11 +147,11 @@ export async function mergePDFs(pdfs: GeneratedPDF[], filename: string): Promise
         const copiedPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices())
         copiedPages.forEach((page) => mergedPdf.addPage(page))
     }
-    
+
     // Save the merged PDF
     const mergedPdfBytes = await mergedPdf.save()
-    const mergedBlob = new Blob([mergedPdfBytes], { type: 'application/pdf' })
-    
+    const mergedBlob = new Blob([mergedPdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' })
+
     // Download
     downloadPDF(mergedBlob, filename)
 }
