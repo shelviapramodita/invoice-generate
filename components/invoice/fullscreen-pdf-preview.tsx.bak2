@@ -1,0 +1,236 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Download, X, FileArchive, FilePlus2 } from 'lucide-react'
+import { GeneratedPDF } from '@/lib/pdf/pdf-generator'
+import { cn } from '@/lib/utils'
+
+interface FullScreenPDFPreviewProps {
+    open: boolean
+    onClose: () => void
+    pdfs: GeneratedPDF[]
+    onDownload: () => void
+    batchName?: string
+}
+
+export function FullScreenPDFPreview({
+    open,
+    onClose,
+    pdfs,
+    onDownload,
+    batchName
+}: FullScreenPDFPreviewProps) {
+    const [selectedPdf, setSelectedPdf] = useState<GeneratedPDF | null>(null)
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+    const [downloading, setDownloading] = useState(false)
+
+    // Update preview URL when selected PDF changes
+    const handleSelectPdf = (pdf: GeneratedPDF) => {
+        setSelectedPdf(pdf)
+        // Revoke previous URL to avoid memory leak
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl)
+        }
+        // Create new preview URL
+        const url = URL.createObjectURL(pdf.blob)
+        setPreviewUrl(url)
+    }
+
+    // Set initial preview when dialog opens or PDFs change
+    useEffect(() => {
+        if (open && pdfs.length > 0 && !selectedPdf) {
+            handleSelectPdf(pdfs[0])
+        }
+    }, [open, pdfs])
+
+    const handleClose = () => {
+        // Cleanup
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl)
+            setPreviewUrl(null)
+        }
+        setSelectedPdf(null)
+        onClose()
+    }
+
+    const handleDownloadCurrent = async () => {
+        if (!selectedPdf) return
+
+        setDownloading(true)
+        try {
+            const { downloadPDF } = await import('@/lib/pdf/pdf-generator')
+            const filename = batchName
+                ? `${batchName}-${selectedPdf.supplier}-${selectedPdf.invoiceNumber}.pdf`
+                : `Invoice-${selectedPdf.supplier}-${selectedPdf.invoiceNumber}.pdf`
+            downloadPDF(selectedPdf.blob, filename)
+        } finally {
+            setDownloading(false)
+        }
+    }
+
+    const handleDownloadMerged = async () => {
+        setDownloading(true)
+        try {
+            const { mergePDFs } = await import('@/lib/pdf/pdf-generator')
+            const filename = batchName
+                ? `${batchName}-All-Invoices-Merged.pdf`
+                : `All-Invoices-Merged.pdf`
+            await mergePDFs(pdfs, filename)
+            onClose()
+        } finally {
+            setDownloading(false)
+        }
+    }
+
+    const handleDownloadAll = () => {
+        onDownload()
+        handleClose()
+    }
+
+    if (!open) return null
+
+    const isLoading = pdfs.length === 0
+
+    return (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-background w-[92vw] h-[92vh] rounded-xl shadow-2xl flex flex-col border">
+                {/* Header */}
+                <div className="px-6 py-4 border-b bg-background shrink-0 rounded-t-xl">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <h2 className="text-lg font-bold">Preview Invoice PDF</h2>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                                {isLoading 
+                                    ? 'Memuat PDFs dari storage...'
+                                    : `Review semua invoice sebelum download. Total: ${pdfs.length} file PDF`
+                                }
+                            </p>
+                        </div>
+                        <Button variant="ghost" size="icon-sm" onClick={handleClose}>
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Main Content */}
+                {isLoading ? (
+                    <div className="flex-1 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+                            <p className="text-lg font-semibold">Mengunduh PDFs...</p>
+                            <p className="text-sm text-muted-foreground mt-2">Harap tunggu sebentar</p>
+                        </div>
+                    </div>
+                ) : (
+                <div className="flex-1 flex gap-4 p-4 min-h-0 overflow-hidden">
+                    {/* PDF List Sidebar */}
+                    <div className="w-80 flex-shrink-0 border rounded-lg p-4 overflow-y-auto bg-muted/20">
+                        <p className="text-sm font-semibold mb-3 text-foreground">Daftar Invoice:</p>
+                        <div className="space-y-2">
+                            {pdfs.map((pdf, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => handleSelectPdf(pdf)}
+                                    className={cn(
+                                        "w-full text-left p-3 rounded-lg border transition-all",
+                                        selectedPdf === pdf
+                                            ? "bg-primary text-primary-foreground border-primary shadow-md"
+                                            : "hover:bg-muted hover:border-primary/20 hover:shadow-sm border-border"
+                                    )}
+                                >
+                                    <div className="text-sm font-bold truncate">
+                                        {pdf.supplier}
+                                    </div>
+                                    <div className={cn(
+                                        "text-xs mt-1 font-mono",
+                                        selectedPdf === pdf ? "opacity-90" : "opacity-60"
+                                    )}>
+                                        {pdf.invoiceNumber}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* PDF Preview */}
+                    <div className="flex-1 border rounded-lg bg-white dark:bg-zinc-950 shadow-lg overflow-hidden">
+                        {previewUrl ? (
+                            <iframe
+                                src={`${previewUrl}#view=FitH&toolbar=1&navpanes=0&scrollbar=1`}
+                                className="w-full h-full border-0"
+                                title="PDF Preview"
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                                <div className="text-center">
+                                    <p className="text-lg font-medium">Pilih invoice untuk preview</p>
+                                    <p className="text-sm mt-2 opacity-70">Klik salah satu invoice di sebelah kiri</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                {!isLoading && (
+                <div className="border-t bg-muted/20 shrink-0 rounded-b-xl">
+                    <div className="flex justify-between items-center px-6 py-4">
+                        <div className="text-sm">
+                            {batchName && (
+                                <span className="font-semibold text-foreground">Batch: {batchName}</span>
+                            )}
+                            {batchName && <span className="mx-2 text-muted-foreground">•</span>}
+                            <span className="font-bold text-foreground">{pdfs.length} invoice</span>
+                            <span className="text-muted-foreground ml-1">siap di-download</span>
+                        </div>
+                        <Button variant="outline" onClick={handleClose} disabled={downloading}>
+                            <X className="mr-2 h-4 w-4" />
+                            Batal
+                        </Button>
+                    </div>
+
+                    {/* Download Options */}
+                    <div className="px-6 pb-4">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Pilih opsi download:</p>
+                        <div className="grid grid-cols-3 gap-3">
+                            {/* Download Current */}
+                            <Button
+                                variant="outline"
+                                onClick={handleDownloadCurrent}
+                                disabled={!selectedPdf || downloading}
+                                className="w-full"
+                            >
+                                <Download className="mr-2 h-4 w-4" />
+                                File Ini Saja
+                            </Button>
+
+                            {/* Download Merged */}
+                            <Button
+                                variant="default"
+                                onClick={handleDownloadMerged}
+                                disabled={downloading}
+                                className="w-full"
+                            >
+                                <FilePlus2 className="mr-2 h-4 w-4" />
+                                {downloading ? 'Merging...' : 'Gabung Jadi 1 PDF'}
+                            </Button>
+
+                            {/* Download All as ZIP */}
+                            <Button
+                                variant="default"
+                                onClick={handleDownloadAll}
+                                disabled={downloading}
+                                className="w-full"
+                            >
+                                <FileArchive className="mr-2 h-4 w-4" />
+                                Download ZIP ({pdfs.length} file)
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+                )}
+            </div>
+        </div>
+    )
+}

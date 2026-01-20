@@ -1,0 +1,749 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { format } from 'date-fns'
+import { id } from 'date-fns/locale'
+import { Trash2, Eye, X, Edit, Save, CheckCircle } from 'lucide-react'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { FullScreenPDFPreview } from '@/components/invoice/fullscreen-pdf-preview'
+import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-dialog'
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { downloadFile } from '@/lib/storage/file-upload'
+
+interface InvoiceItem {
+    id: string
+    supplier: string
+    invoice_number: string
+    item_name: string
+    quantity: number
+    unit: string
+    price: number
+    total: number
+    pdf_file_path: string
+}
+
+interface InvoiceDetail {
+    id: string
+    batch_name: string | null
+    invoice_date: string
+    total_suppliers: number
+    total_items: number
+    grand_total: number
+    status: string
+    created_at: string
+    items: InvoiceItem[]
+}
+
+interface InvoiceDetailViewProps {
+    invoiceId: string | null
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    onDelete?: () => void
+}
+
+function formatCurrency(amount: number): string {
+    return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0,
+    }).format(amount)
+}
+
+export function InvoiceDetailView({
+    invoiceId,
+    open,
+    onOpenChange,
+    onDelete,
+}: InvoiceDetailViewProps) {
+    const [invoice, setInvoice] = useState<InvoiceDetail | null>(null)
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [downloading, setDownloading] = useState(false)
+    const [loadingStatus, setLoadingStatus] = useState<string>('')
+    const [showPreview, setShowPreview] = useState(false)
+    const [previewPDFs, setPreviewPDFs] = useState<any[]>([])
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [deleting, setDeleting] = useState(false)
+    const [isEditing, setIsEditing] = useState(false)
+    const [editedItems, setEditedItems] = useState<InvoiceItem[]>([])
+    const [saving, setSaving] = useState(false)
+    const [markingComplete, setMarkingComplete] = useState(false)
+
+    const fetchDetail = useCallback(async () => {
+        if (!invoiceId) return
+
+        setLoading(true)
+        setError(null)
+
+        try {
+            const response = await fetch(`/api/invoices/${invoiceId}`)
+            if (!response.ok) {
+                throw new Error('Failed to fetch invoice detail')
+            }
+
+            const result = await response.json()
+            setInvoice(result.data)
+        } catch (err: any) {
+            console.error('Error fetching detail:', err)
+            setError(err.message || 'Unknown error')
+        } finally {
+            setLoading(false)
+        }
+    }, [invoiceId])
+
+    useEffect(() => {
+        if (open && invoiceId) {
+            fetchDetail()
+        }
+    }, [open, invoiceId, fetchDetail])
+
+    const handleDownloadPDF = async (supplier: string, pdfPath: string) => {
+        if (!pdfPath) {
+            alert('File PDF tidak ditemukan')
+            return
+        }
+
+        try {
+            // Show simple loading feedback (mouse cursor wait)
+            document.body.style.cursor = 'wait'
+
+            console.log('Downloading PDF:', { supplier, pdfPath })
+
+            // Download from Supabase Storage
+            const blob = await downloadFile('generated-pdfs', pdfPath)
+
+            // Create download link
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `Invoice-${supplier}-${new Date().getTime()}.pdf`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+
+            console.log('Download success')
+        } catch (error) {
+            console.error('Error downloading PDF:', error)
+            alert('Gagal mendownload PDF. Pastikan file ada di storage.')
+        } finally {
+            document.body.style.cursor = 'default'
+        }
+    }
+
+    const handleDelete = () => {
+        console.log('Delete button clicked in detail view')
+        setShowDeleteConfirm(true)
+    }
+
+    const handleConfirmDelete = async () => {
+        if (!invoiceId) return
+
+        console.log('Delete confirmed, starting delete process for:', invoiceId)
+        setDeleting(true)
+        setShowDeleteConfirm(false)
+
+        try {
+            const response = await fetch(`/api/invoices/${invoiceId}`, {
+                method: 'DELETE',
+            })
+
+            const responseData = await response.json()
+
+            if (!response.ok) {
+                throw new Error(responseData.message || 'Failed to delete')
+            }
+
+            console.log('Delete successful')
+            alert('✅ Invoice berhasil dihapus!')
+
+            // Close detail view and trigger refresh
+            onOpenChange(false)
+            onDelete?.() // This will trigger parent refresh
+        } catch (error) {
+            console.error('Error deleting:', error)
+            alert(`❌ Gagal menghapus invoice\n\nError: ${(error as Error).message}`)
+        } finally {
+            setDeleting(false)
+        }
+    }
+
+
+
+    const handleEdit = () => {
+        if (invoice) {
+            setEditedItems([...invoice.items])
+            setIsEditing(true)
+        }
+    }
+
+    const handleCancelEdit = () => {
+        setIsEditing(false)
+        setEditedItems([])
+    }
+
+    const handleSaveEdit = async () => {
+        if (!invoiceId) return
+
+        setSaving(true)
+        try {
+            console.log('Saving changes:', editedItems)
+
+            const response = await fetch(`/api/invoices/${invoiceId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    items: editedItems,
+                }),
+            })
+
+            const result = await response.json()
+            console.log('Save response:', result)
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to save changes')
+            }
+
+            alert('✅ Perubahan berhasil disimpan!')
+            setIsEditing(false)
+            await fetchDetail()
+        } catch (error) {
+            console.error('Error saving:', error)
+            alert(`❌ Gagal menyimpan perubahan\n\nError: ${(error as Error).message}`)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleMarkComplete = async () => {
+        if (!invoiceId) return
+
+        setMarkingComplete(true)
+        try {
+            const response = await fetch(`/api/invoices/${invoiceId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    status: 'completed',
+                }),
+            })
+
+            const result = await response.json()
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to update status')
+            }
+
+            alert('✅ Invoice berhasil ditandai selesai!')
+            await fetchDetail()
+            onDelete?.() // Refresh parent list
+        } catch (error) {
+            console.error('Error marking complete:', error)
+            alert(`❌ Gagal mengubah status\n\nError: ${(error as Error).message}`)
+        } finally {
+            setMarkingComplete(false)
+        }
+    }
+
+    const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
+        const updated = [...editedItems]
+        updated[index] = {
+            ...updated[index],
+            [field]: value,
+        }
+
+        // Recalculate total if qty or price changed
+        if (field === 'quantity' || field === 'price') {
+            const qty = field === 'quantity' ? parseFloat(value) || 0 : updated[index].quantity
+            const price = field === 'price' ? parseFloat(value) || 0 : updated[index].price
+            updated[index].total = qty * price
+        }
+
+        console.log('Item changed:', { index, field, value, item: updated[index] })
+        setEditedItems(updated)
+    }
+
+    if (!invoice && !loading) {
+        return null
+    }
+
+    // Determine active items (view vs edit)
+    const currentItems = isEditing ? editedItems : (invoice?.items || [])
+
+    // Calculate totals dynamically
+    const displayGrandTotal = currentItems.reduce((sum, item) => sum + item.total, 0)
+    const displayTotalItems = currentItems.length
+
+    // Group items by supplier
+    const itemsBySupplier: Record<string, InvoiceItem[]> = {}
+    currentItems.forEach((item) => {
+        if (!itemsBySupplier[item.supplier]) {
+            itemsBySupplier[item.supplier] = []
+        }
+        itemsBySupplier[item.supplier]!.push(item)
+    })
+
+    const suppliers = Object.keys(itemsBySupplier)
+
+    // Fetch all PDFs for batch download
+    const fetchAllPDFs = async (onProgress?: (count: number, total: number) => void) => {
+        if (!invoice) return []
+
+        let completed = 0
+        const total = suppliers.length
+
+        const pdfPromises = suppliers.map(async (supplier) => {
+            const items = itemsBySupplier[supplier]
+            const pdfPath = items[0]?.pdf_file_path
+
+            // Skip client-side downloaded PDFs (not stored in Supabase)
+            if (!pdfPath || pdfPath === 'client-side-download') {
+                console.warn(`[Preview] PDF not stored for ${supplier} (path: ${pdfPath})`)
+                completed++
+                onProgress?.(completed, total)
+                return null
+            }
+
+            try {
+                console.log(`[Preview] Downloading PDF for ${supplier} from ${pdfPath}`)
+                const blob = await downloadFile('generated-pdfs', pdfPath)
+                completed++
+                onProgress?.(completed, total)
+                return {
+                    supplier,
+                    invoiceNumber: items[0]?.invoice_number || '',
+                    blob
+                }
+            } catch (error) {
+                console.error(`Error downloading PDF for ${supplier} (path: ${pdfPath}):`, error)
+                completed++
+                onProgress?.(completed, total)
+                return null
+            }
+        })
+
+        const pdfs = await Promise.all(pdfPromises)
+        return pdfs.filter((pdf): pdf is { supplier: string; invoiceNumber: string; blob: Blob } => pdf !== null)
+    }
+
+    // Download all PDFs separately
+    const handleDownloadAll = async () => {
+        setDownloading(true)
+        try {
+            const pdfs = await fetchAllPDFs()
+            if (pdfs.length === 0) {
+                alert('Tidak ada PDF yang tersedia untuk didownload')
+                return
+            }
+
+            const { downloadAllPDFs } = await import('@/lib/pdf/pdf-generator')
+            await downloadAllPDFs(pdfs, invoice?.batch_name || undefined)
+        } catch (error) {
+            console.error('Error downloading all PDFs:', error)
+            alert('Gagal mendownload PDFs')
+        } finally {
+            setDownloading(false)
+        }
+    }
+
+    // Open Preview Modal
+    const handlePreview = async () => {
+        console.log('handlePreview called!')
+
+        // Check if any PDFs are stored in Supabase
+        const hasStoredPDFs = suppliers.some(s => {
+            const path = itemsBySupplier[s]?.[0]?.pdf_file_path
+            console.log(`Checking ${s}: path = ${path}`)
+            return path && path !== 'client-side-download'
+        })
+
+        console.log('hasStoredPDFs:', hasStoredPDFs)
+
+        if (!hasStoredPDFs) {
+            console.log('Showing alert: No stored PDFs')
+            alert('⚠️ PDFs Tidak Tersedia untuk Preview\n\nInvoice ini di-generate dengan metode lama dan PDFs tidak disimpan di storage.\n\nUntuk menggunakan fitur preview, silakan generate ulang invoice dari halaman Upload.')
+            console.log('Alert shown, returning early')
+            return // Stop execution here
+        }
+
+        console.log('Continuing to fetch PDFs...')
+        setDownloading(true)
+        setLoadingStatus('Preparing...')
+        setShowPreview(true) // Show preview immediately
+
+        try {
+            console.log('Fetching PDFs...')
+            const pdfs = await fetchAllPDFs((c, t) => {
+                const status = `Downloading ${c}/${t}...`
+                console.log(status)
+                setLoadingStatus(status)
+            })
+
+            console.log('PDFs fetched:', pdfs.length)
+
+            if (pdfs.length > 0) {
+                setLoadingStatus('Opening preview...')
+                setPreviewPDFs(pdfs)
+            } else {
+                alert('Tidak ada PDF yang tersedia di storage untuk invoice ini.')
+                setShowPreview(false)
+            }
+        } catch (error) {
+            console.error('Error fetching PDFs for preview:', error)
+            alert(`Critical Error: ${(error as Error).message}\n\nCheck console for details.`)
+            setShowPreview(false)
+        } finally {
+            setDownloading(false)
+            setLoadingStatus('')
+        }
+    }
+
+    return (
+        <>
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent
+                    className="sm:max-w-7xl h-[90vh] w-full p-0 flex flex-col gap-0 overflow-hidden"
+                    showCloseButton={false}
+                >
+                    <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+                        {/* ... existing header code ... */}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <DialogTitle>Invoice Detail</DialogTitle>
+                                <DialogDescription>
+                                    {invoice?.batch_name || 'Untitled'} -{' '}
+                                    {invoice && format(new Date(invoice.invoice_date), 'dd MMMM yyyy', { locale: id })}
+                                </DialogDescription>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {isEditing ? (
+                                    <>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleCancelEdit}
+                                            disabled={saving}
+                                        >
+                                            <X className="h-4 w-4 mr-2" />
+                                            Batal
+                                        </Button>
+                                        <Button
+                                            variant="default"
+                                            size="sm"
+                                            onClick={handleSaveEdit}
+                                            disabled={saving}
+                                        >
+                                            <Save className="h-4 w-4 mr-2" />
+                                            {saving ? 'Menyimpan...' : 'Simpan'}
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleEdit}
+                                        >
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Edit
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            onClick={() => onOpenChange(false)}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto px-6">
+                        {loading && (
+                            <div className="flex items-center justify-center py-12">
+                                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                            </div>
+                        )}
+
+                        {error && (
+                            <div className="py-12 text-center">
+                                <p className="text-destructive mb-4">{error}</p>
+                                <Button onClick={fetchDetail} variant="outline">
+                                    Coba Lagi
+                                </Button>
+                            </div>
+                        )}
+
+                        {invoice && !loading && (
+                            <div className="mt-6 space-y-6 pb-6">
+                                {/* Summary Cards */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Card className="bg-primary/5 border-primary/10 shadow-sm">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                                Total Suppliers
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-3xl font-bold text-primary">{invoice.total_suppliers}</div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className="bg-primary/5 border-primary/10 shadow-sm">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                                Total Items
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-3xl font-bold text-primary">{displayTotalItems}</div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className="col-span-2 bg-gradient-to-br from-primary to-primary/90 text-primary-foreground border-none shadow-md">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-xs font-medium text-primary-foreground/80 uppercase tracking-wider">
+                                                Grand Total
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-4xl font-bold tracking-tight">
+                                                {formatCurrency(displayGrandTotal)}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+
+                                {/* Items per Supplier */}
+                                <Tabs defaultValue={suppliers[0]} className="w-full">
+                                    <TabsList className="w-full h-auto p-1 bg-muted/50 rounded-xl mb-6 flex flex-wrap gap-1">
+                                        {suppliers.map((supplier) => (
+                                            <TabsTrigger
+                                                key={supplier}
+                                                value={supplier}
+                                                className="flex-1 min-w-[100px] rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm py-2 text-sm transition-all"
+                                            >
+                                                {supplier}
+                                            </TabsTrigger>
+                                        ))}
+                                    </TabsList>
+
+                                    {suppliers.map((supplier) => {
+                                        const items = itemsBySupplier[supplier] || []
+                                        const subtotal = items.reduce((sum, item) => sum + item.total, 0)
+
+                                        return (
+                                            <TabsContent key={supplier} value={supplier} className="space-y-4 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
+                                                <div className="flex items-center justify-between flex-wrap gap-3 bg-muted/30 p-4 rounded-xl border">
+                                                    <div>
+                                                        <h3 className="font-bold text-lg text-foreground">{supplier}</h3>
+                                                        <p className="text-sm text-muted-foreground mt-1">
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mr-2">
+                                                                {items.length} items
+                                                            </span>
+                                                            Subtotal: <span className="font-semibold text-foreground">{formatCurrency(subtotal)}</span>
+                                                        </p>
+                                                    </div>
+
+                                                </div>
+
+                                                <div className="border rounded-xl overflow-hidden shadow-sm bg-card">
+                                                    <div className="overflow-x-auto">
+                                                        <Table>
+                                                            <TableHeader className="bg-muted/40">
+                                                                <TableRow className="hover:bg-transparent">
+                                                                    <TableHead className="w-12 text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-4">No</TableHead>
+                                                                    <TableHead className="min-w-[180px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Item Description</TableHead>
+                                                                    <TableHead className="text-right w-20 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Qty</TableHead>
+                                                                    <TableHead className="w-20 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Unit</TableHead>
+                                                                    <TableHead className="text-right min-w-[120px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Price</TableHead>
+                                                                    <TableHead className="text-right min-w-[120px] text-xs font-semibold uppercase tracking-wider text-muted-foreground pr-4">Total</TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {items.map((item, index) => {
+                                                                    const globalIndex = isEditing
+                                                                        ? editedItems.findIndex(i => i.id === item.id)
+                                                                        : -1
+
+                                                                    return (
+                                                                        <TableRow key={item.id} className="hover:bg-muted/30 transition-colors">
+                                                                            <TableCell className="text-xs text-muted-foreground pl-4">{index + 1}</TableCell>
+                                                                            <TableCell className="font-medium text-sm text-foreground">
+                                                                                {isEditing ? (
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        value={item.item_name}
+                                                                                        onChange={(e) => handleItemChange(globalIndex, 'item_name', e.target.value)}
+                                                                                        className="w-full px-2 py-1 border rounded text-sm"
+                                                                                    />
+                                                                                ) : (
+                                                                                    item.item_name
+                                                                                )}
+                                                                            </TableCell>
+                                                                            <TableCell className="text-right text-sm">
+                                                                                {isEditing ? (
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        value={item.quantity}
+                                                                                        onChange={(e) => handleItemChange(globalIndex, 'quantity', e.target.value)}
+                                                                                        className="w-full px-2 py-1 border rounded text-sm text-right"
+                                                                                        step="0.01"
+                                                                                    />
+                                                                                ) : (
+                                                                                    item.quantity
+                                                                                )}
+                                                                            </TableCell>
+                                                                            <TableCell className="text-xs text-muted-foreground">
+                                                                                {isEditing ? (
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        value={item.unit}
+                                                                                        onChange={(e) => handleItemChange(globalIndex, 'unit', e.target.value)}
+                                                                                        className="w-full px-2 py-1 border rounded text-xs"
+                                                                                    />
+                                                                                ) : (
+                                                                                    item.unit
+                                                                                )}
+                                                                            </TableCell>
+                                                                            <TableCell className="text-right text-sm whitespace-nowrap font-mono text-muted-foreground">
+                                                                                {isEditing ? (
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        value={item.price}
+                                                                                        onChange={(e) => handleItemChange(globalIndex, 'price', e.target.value)}
+                                                                                        className="w-full px-2 py-1 border rounded text-sm text-right font-mono"
+                                                                                        step="1000"
+                                                                                    />
+                                                                                ) : (
+                                                                                    formatCurrency(item.price)
+                                                                                )}
+                                                                            </TableCell>
+                                                                            <TableCell className="text-right font-medium text-sm whitespace-nowrap font-mono pr-4">
+                                                                                {formatCurrency(item.total)}
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    )
+                                                                })}
+                                                            </TableBody>
+                                                        </Table>
+                                                    </div>
+                                                </div>
+                                            </TabsContent>
+                                        )
+                                    })}
+                                </Tabs>
+
+                                {/* Preview & Download Button */}
+                                <div className="border-t pt-6 mt-6">
+                                    <h4 className="text-sm font-medium mb-3 text-muted-foreground">Actions</h4>
+                                    <Button
+                                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md h-12"
+                                        onClick={(e) => {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            console.log('Button clicked!')
+                                            handlePreview()
+                                        }}
+                                        disabled={downloading || isEditing}
+                                        type="button"
+                                    >
+                                        {downloading ? (
+                                            <>
+                                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                                                <span>{loadingStatus || 'Processing...'}</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Eye className="mr-2 h-5 w-5" />
+                                                <span className="text-base font-medium">Preview & Download PDF</span>
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex gap-3 pt-6 mt-6 border-t">
+                                    {invoice.status === 'generated' && (
+                                        <Button
+                                            variant="outline"
+                                            size="lg"
+                                            className="flex-1 shadow-sm hover:scale-[1.02] transition-transform border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+                                            onClick={handleMarkComplete}
+                                            disabled={isEditing || markingComplete}
+                                        >
+                                            {markingComplete ? (
+                                                <>
+                                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                                                    Memproses...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                                    Tandai Selesai
+                                                </>
+                                            )}
+                                        </Button>
+                                    )}
+                                    {invoice.status === 'completed' && (
+                                        <div className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-green-50 text-green-700 rounded-lg border border-green-200">
+                                            <CheckCircle className="h-5 w-5" />
+                                            <span className="font-medium">Invoice Selesai</span>
+                                        </div>
+                                    )}
+                                    <Button
+                                        variant="destructive"
+                                        size="lg"
+                                        className="flex-1 shadow-sm hover:scale-[1.02] transition-transform"
+                                        onClick={handleDelete}
+                                        disabled={isEditing || markingComplete}
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete Invoice
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <FullScreenPDFPreview
+                open={showPreview}
+                onClose={() => setShowPreview(false)}
+                pdfs={previewPDFs}
+                onDownload={handleDownloadAll}
+                batchName={invoice?.batch_name || undefined}
+            />
+
+            <DeleteConfirmationDialog
+                open={showDeleteConfirm}
+                onOpenChange={setShowDeleteConfirm}
+                onConfirm={handleConfirmDelete}
+                loading={deleting}
+            />
+        </>
+    )
+}
