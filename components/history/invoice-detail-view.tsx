@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { Trash2, Eye, X, Edit, Save, CheckCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import {
     Dialog,
     DialogContent,
@@ -115,7 +116,7 @@ export function InvoiceDetailView({
 
     const handleDownloadPDF = async (supplier: string, pdfPath: string) => {
         if (!pdfPath) {
-            alert('File PDF tidak ditemukan')
+            toast.error('File PDF tidak ditemukan')
             return
         }
 
@@ -141,7 +142,7 @@ export function InvoiceDetailView({
             console.log('Download success')
         } catch (error) {
             console.error('Error downloading PDF:', error)
-            alert('Gagal mendownload PDF. Pastikan file ada di storage.')
+            toast.error('Gagal mendownload PDF. Pastikan file ada di storage.')
         } finally {
             document.body.style.cursor = 'default'
         }
@@ -171,14 +172,14 @@ export function InvoiceDetailView({
             }
 
             console.log('Delete successful')
-            alert('✅ Invoice berhasil dihapus!')
+            toast.success('Invoice berhasil dihapus!')
 
             // Close detail view and trigger refresh
             onOpenChange(false)
             onDelete?.() // This will trigger parent refresh
         } catch (error) {
             console.error('Error deleting:', error)
-            alert(`❌ Gagal menghapus invoice\n\nError: ${(error as Error).message}`)
+            toast.error(`Gagal menghapus invoice: ${(error as Error).message}`)
         } finally {
             setDeleting(false)
         }
@@ -222,12 +223,12 @@ export function InvoiceDetailView({
                 throw new Error(result.message || 'Failed to save changes')
             }
 
-            alert('✅ Perubahan berhasil disimpan dan PDF sudah di-regenerate!')
+            toast.success('Perubahan berhasil disimpan dan PDF sudah di-regenerate!')
             setIsEditing(false)
             await fetchDetail()
         } catch (error) {
             console.error('Error saving:', error)
-            alert(`❌ Gagal menyimpan perubahan\n\nError: ${(error as Error).message}`)
+            toast.error(`Gagal menyimpan perubahan: ${(error as Error).message}`)
         } finally {
             setSaving(false)
         }
@@ -254,12 +255,12 @@ export function InvoiceDetailView({
                 throw new Error(result.message || 'Failed to update status')
             }
 
-            alert('✅ Invoice berhasil ditandai selesai!')
+            toast.success('Invoice berhasil ditandai selesai!')
             await fetchDetail()
             onDelete?.() // Refresh parent list
         } catch (error) {
             console.error('Error marking complete:', error)
-            alert(`❌ Gagal mengubah status\n\nError: ${(error as Error).message}`)
+            toast.error(`Gagal mengubah status: ${(error as Error).message}`)
         } finally {
             setMarkingComplete(false)
         }
@@ -352,7 +353,7 @@ export function InvoiceDetailView({
         try {
             const pdfs = await fetchAllPDFs()
             if (pdfs.length === 0) {
-                alert('Tidak ada PDF yang tersedia untuk didownload')
+                toast.warning('Tidak ada PDF yang tersedia untuk didownload')
                 return
             }
 
@@ -360,7 +361,7 @@ export function InvoiceDetailView({
             await downloadAllPDFs(pdfs, invoice?.batch_name || undefined)
         } catch (error) {
             console.error('Error downloading all PDFs:', error)
-            alert('Gagal mendownload PDFs')
+            toast.error('Gagal mendownload PDFs')
         } finally {
             setDownloading(false)
         }
@@ -381,7 +382,7 @@ export function InvoiceDetailView({
 
         if (!hasStoredPDFs) {
             console.log('Showing alert: No stored PDFs')
-            alert('⚠️ PDFs Tidak Tersedia untuk Preview\n\nInvoice ini di-generate dengan metode lama dan PDFs tidak disimpan di storage.\n\nUntuk menggunakan fitur preview, silakan generate ulang invoice dari halaman Upload.')
+            toast.warning('PDFs tidak tersedia untuk preview. Invoice ini di-generate dengan metode lama.')
             console.log('Alert shown, returning early')
             return // Stop execution here
         }
@@ -405,12 +406,12 @@ export function InvoiceDetailView({
                 setLoadingStatus('Opening preview...')
                 setPreviewPDFs(pdfs)
             } else {
-                alert('Tidak ada PDF yang tersedia di storage untuk invoice ini.')
+                toast.warning('Tidak ada PDF yang tersedia di storage untuk invoice ini.')
                 setShowPreview(false)
             }
         } catch (error) {
             console.error('Error fetching PDFs for preview:', error)
-            alert(`Critical Error: ${(error as Error).message}\n\nCheck console for details.`)
+            toast.error(`Critical Error: ${(error as Error).message}`)
             setShowPreview(false)
         } finally {
             setDownloading(false)

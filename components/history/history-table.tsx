@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { Eye, Trash2, Calendar, Package, FileSpreadsheet } from 'lucide-react'
+import { toast } from 'sonner'
 import {
     Table,
     TableBody,
@@ -94,12 +95,12 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
                 throw new Error(responseData.message || 'Failed to delete')
             }
 
-            alert('✅ Invoice berhasil dihapus!')
+            toast.success('Invoice berhasil dihapus!')
             console.log('Delete successful, refreshing...')
             onRefresh?.()
         } catch (error) {
             console.error('Error deleting:', error)
-            alert(`❌ Gagal menghapus invoice\n\nError: ${(error as Error).message}`)
+            toast.error(`Gagal menghapus invoice: ${(error as Error).message}`)
         } finally {
             setDeleting(null)
             setInvoiceToDelete(null)

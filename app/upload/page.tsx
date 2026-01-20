@@ -16,6 +16,7 @@ import { ParsedExcelData } from '@/types'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 export default function UploadPage() {
     const [parsedData, setParsedData] = useState<ParsedExcelData | null>(null)
@@ -79,7 +80,7 @@ export default function UploadPage() {
             setShowPreview(true)
         } catch (error) {
             console.error('Error generating PDF:', error)
-            alert('Gagal generate PDF. Silakan coba lagi.\n\nError: ' + (error as Error).message)
+            toast.error('Gagal generate PDF: ' + (error as Error).message)
         } finally {
             setGenerating(false)
         }

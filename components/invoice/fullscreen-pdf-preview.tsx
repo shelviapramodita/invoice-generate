@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Download, X, FileArchive, FilePlus2 } from 'lucide-react'
 import { GeneratedPDF } from '@/lib/pdf/pdf-generator'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import {
     Dialog,
     DialogContent,
@@ -75,10 +76,10 @@ export function FullScreenPDFPreview({
                 : `Invoice-${selectedPdf.supplier}-${selectedPdf.invoiceNumber}.pdf`
             console.log('Download filename:', filename)
             downloadPDF(selectedPdf.blob, filename)
-            alert('✅ Download PDF Berhasil!')
+            toast.success('Download PDF Berhasil!')
         } catch (error) {
             console.error('Error downloading PDF:', error)
-            alert('Gagal mendownload PDF: ' + (error as Error).message)
+            toast.error('Gagal mendownload PDF: ' + (error as Error).message)
         } finally {
             setDownloading(false)
         }
@@ -95,11 +96,11 @@ export function FullScreenPDFPreview({
             console.log('Merged filename:', filename)
             await mergePDFs(pdfs, filename)
             console.log('Merge complete')
-            alert('✅ Download PDF Gabungan Berhasil!')
+            toast.success('Download PDF Gabungan Berhasil!')
             // Keep dialog open
         } catch (error) {
             console.error('Error merging PDFs:', error)
-            alert('Gagal menggabungkan PDF: ' + (error as Error).message)
+            toast.error('Gagal menggabungkan PDF: ' + (error as Error).message)
         } finally {
             setDownloading(false)
         }
@@ -109,11 +110,11 @@ export function FullScreenPDFPreview({
         console.log('Downloading all PDFs as ZIP')
         try {
             onDownload()
-            alert('✅ Download ZIP Berhasil!')
+            toast.success('Download ZIP Berhasil!')
             // Keep dialog open
         } catch (error) {
             console.error('Error downloading ZIP:', error)
-            alert('Gagal mendownload ZIP: ' + (error as Error).message)
+            toast.error('Gagal mendownload ZIP: ' + (error as Error).message)
         }
     }
 
