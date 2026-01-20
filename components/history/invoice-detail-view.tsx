@@ -222,7 +222,7 @@ export function InvoiceDetailView({
                 throw new Error(result.message || 'Failed to save changes')
             }
 
-            alert('✅ Perubahan berhasil disimpan!')
+            alert('✅ Perubahan berhasil disimpan dan PDF sudah di-regenerate!')
             setIsEditing(false)
             await fetchDetail()
         } catch (error) {
@@ -454,7 +454,7 @@ export function InvoiceDetailView({
                                             disabled={saving}
                                         >
                                             <Save className="h-4 w-4 mr-2" />
-                                            {saving ? 'Menyimpan...' : 'Simpan'}
+                                            {saving ? 'Menyimpan & Regenerating PDF...' : 'Simpan'}
                                         </Button>
                                     </>
                                 ) : (

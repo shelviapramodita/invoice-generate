@@ -92,7 +92,7 @@ export async function PATCH(
             // Recalculate invoice totals
             const { data: updatedItems, error: fetchError } = await supabase
                 .from('invoice_items')
-                .select('total')
+                .select('*')
                 .eq('history_id', id)
 
             if (fetchError) {
@@ -100,7 +100,7 @@ export async function PATCH(
                 throw fetchError
             }
 
-            const grandTotal = updatedItems.reduce((sum: number, item: { total: number }) => sum + item.total, 0)
+            const grandTotal = updatedItems.reduce((sum: number, item: any) => sum + item.total, 0)
 
             console.log('[API] Updating grand total:', grandTotal)
 
@@ -114,7 +114,113 @@ export async function PATCH(
                 throw updateError
             }
 
-            console.log('[API] Invoice items updated successfully')
+            // ========================================
+            // REGENERATE PDFs with updated data
+            // ========================================
+            console.log('[API] Regenerating PDFs with updated data...')
+
+            // Get invoice history to get invoice_date
+            const { data: invoiceHistory, error: historyError } = await supabase
+                .from('invoice_history')
+                .select('invoice_date')
+                .eq('id', id)
+                .single()
+
+            if (historyError) {
+                console.error('[API] Error fetching invoice history:', historyError)
+                throw historyError
+            }
+
+            // Group items by supplier
+            const itemsBySupplier: Record<string, any[]> = {}
+            updatedItems.forEach((item: any) => {
+                if (!itemsBySupplier[item.supplier]) {
+                    itemsBySupplier[item.supplier] = []
+                }
+                itemsBySupplier[item.supplier].push(item)
+            })
+
+            // Import PDF generator dynamically
+            const { pdf } = await import('@react-pdf/renderer')
+            const { JayamenTemplate } = await import('@/lib/pdf/templates/jayamen-template')
+            const { UndiYuwonoTemplate } = await import('@/lib/pdf/templates/undi-yuwono-template')
+            const { SekarWijayakusumaTemplate } = await import('@/lib/pdf/templates/sekar-wijayakusuma-template')
+
+            const invoiceDate = new Date(invoiceHistory.invoice_date)
+
+            // Generate new PDFs for each supplier
+            for (const [supplier, supplierItems] of Object.entries(itemsBySupplier)) {
+                const invoiceNumber = supplierItems[0]?.invoice_number || '#KWITANSI0001'
+                const oldPdfPath = supplierItems[0]?.pdf_file_path
+
+                console.log(`[API] Regenerating PDF for ${supplier}...`)
+
+                // Select template based on supplier
+                let template
+                const items = supplierItems.map((item: any) => ({
+                    supplier: item.supplier,
+                    item_name: item.item_name,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    price: item.price,
+                    total: item.total,
+                }))
+
+                if (supplier.includes('JAYAMEN')) {
+                    template = JayamenTemplate({ invoiceNumber, invoiceDate, items })
+                } else if (supplier.includes('UNDI') || supplier.includes('YUWONO')) {
+                    template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate, items })
+                } else if (supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
+                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate, items })
+                } else {
+                    template = JayamenTemplate({ invoiceNumber, invoiceDate, items })
+                }
+
+                // Generate PDF blob
+                const pdfBlob = await pdf(template).toBlob()
+                const arrayBuffer = await pdfBlob.arrayBuffer()
+                const buffer = Buffer.from(arrayBuffer)
+
+                // Delete old PDF from storage (if exists and not client-side)
+                if (oldPdfPath && oldPdfPath !== 'client-side-download') {
+                    console.log(`[API] Deleting old PDF: ${oldPdfPath}`)
+                    await supabase.storage.from('generated-pdfs').remove([oldPdfPath])
+                }
+
+                // Upload new PDF
+                const safeSupplier = supplier.replace(/[^a-zA-Z0-9.-]/g, '-')
+                const safeInvoiceNumber = invoiceNumber.replace(/[^a-zA-Z0-9.-]/g, '-')
+                const newFilename = `${Date.now()}-${safeSupplier}-${safeInvoiceNumber}.pdf`
+
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('generated-pdfs')
+                    .upload(newFilename, buffer, {
+                        contentType: 'application/pdf',
+                        upsert: false
+                    })
+
+                if (uploadError) {
+                    console.error(`[API] Failed to upload new PDF for ${supplier}:`, uploadError)
+                    throw new Error(`Failed to upload PDF: ${uploadError.message}`)
+                }
+
+                const newPdfPath = uploadData.path
+                console.log(`[API] Uploaded new PDF for ${supplier} to ${newPdfPath}`)
+
+                // Update all items for this supplier with new PDF path
+                const supplierItemIds = supplierItems.map((item: any) => item.id)
+                const { error: pathUpdateError } = await supabase
+                    .from('invoice_items')
+                    .update({ pdf_file_path: newPdfPath })
+                    .in('id', supplierItemIds)
+
+                if (pathUpdateError) {
+                    console.error(`[API] Error updating PDF path for ${supplier}:`, pathUpdateError)
+                    throw pathUpdateError
+                }
+            }
+
+            console.log('[API] ✅ Invoice items updated and PDFs regenerated successfully')
             return NextResponse.json({ success: true })
         }
 
