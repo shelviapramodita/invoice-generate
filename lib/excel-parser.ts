@@ -10,6 +10,65 @@ interface ParseResult {
 }
 
 /**
+ * Normalize column names to expected format
+ * Handles various naming conventions in Excel files
+ */
+function normalizeColumnNames(row: any): any {
+    const normalized: any = {}
+
+    // Column name mappings (lowercase key -> standard name)
+    const columnMappings: Record<string, string> = {
+        // URAIAN variations
+        'uraian': 'URAIAN',
+        'nama': 'URAIAN',
+        'nama barang': 'URAIAN',
+        'nama item': 'URAIAN',
+        'item': 'URAIAN',
+        'description': 'URAIAN',
+        'deskripsi': 'URAIAN',
+        'barang': 'URAIAN',
+        // QTY variations
+        'qty': 'QTY',
+        'quantity': 'QTY',
+        'jumlah': 'QTY',
+        'jml': 'QTY',
+        'kuantitas': 'QTY',
+        // HARGA variations
+        'harga': 'HARGA',
+        'price': 'HARGA',
+        'harga satuan': 'HARGA',
+        'unit price': 'HARGA',
+        // SATUAN variations
+        'satuan': 'SATUAN',
+        'unit': 'SATUAN',
+        'uom': 'SATUAN',
+        // TOTAL variations
+        'total': 'TOTAL',
+        'jumlah harga': 'TOTAL',
+        'amount': 'TOTAL',
+        'subtotal': 'TOTAL',
+        // SUPPLIER variations
+        'supplier': 'SUPPLIER',
+        'vendor': 'SUPPLIER',
+        'nama supplier': 'SUPPLIER',
+        'pemasok': 'SUPPLIER',
+        // NO (optional - will be ignored)
+        'no': 'NO',
+        'no.': 'NO',
+        'nomor': 'NO',
+        'number': 'NO',
+    }
+
+    for (const [key, value] of Object.entries(row)) {
+        const normalizedKey = key.toString().trim().toLowerCase()
+        const mappedKey = columnMappings[normalizedKey] || key
+        normalized[mappedKey] = value
+    }
+
+    return normalized
+}
+
+/**
  * Parse Excel file dan group by supplier
  */
 export async function parseExcelFile(file: File): Promise<ParseResult> {
@@ -34,6 +93,11 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             }
         }
 
+        // Log first row column names for debugging
+        const firstRow = rawData[0] as any
+        console.log('[Parser] Column names found:', Object.keys(firstRow))
+
+
         // Validate and transform data
         const validRows: ExcelRow[] = []
         const invalidRows: Array<{ row: number; errors: string[] }> = []
@@ -42,7 +106,8 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
         console.log('[Parser] First row sample:', JSON.stringify(rawData[0]))
 
         rawData.forEach((row, index) => {
-            const rowObj = row as any
+            // Normalize column names first
+            const rowObj = normalizeColumnNames(row)
 
             // Get URAIAN value for checking
             const uraian = rowObj.URAIAN?.toString().trim().toUpperCase() || ''
@@ -71,8 +136,8 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             }
 
             try {
-                // Validate row against schema
-                const validated = excelRowSchema.parse(row)
+                // Validate normalized row against schema
+                const validated = excelRowSchema.parse(rowObj)
                 validRows.push(validated as ExcelRow)
                 console.log(`[Parser] Valid row ${index + 2}: ${rowObj.URAIAN}`)
             } catch (error: any) {
