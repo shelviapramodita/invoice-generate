@@ -83,26 +83,75 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
         const firstSheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[firstSheetName]
 
-        // Convert to JSON
-        const rawData: unknown[] = XLSX.utils.sheet_to_json(worksheet)
+        // Get raw array of arrays to find the header row
+        const rawArrays: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
 
-        if (rawData.length === 0) {
+        if (rawArrays.length === 0) {
             return {
                 success: false,
                 error: 'File Excel kosong atau tidak memiliki data',
             }
         }
 
-        // Log first row column names for debugging
-        const firstRow = rawData[0] as any
-        console.log('[Parser] Column names found:', Object.keys(firstRow))
+        // Find the header row by looking for row that contains URAIAN, QTY, etc
+        let headerRowIndex = -1
+        for (let i = 0; i < Math.min(rawArrays.length, 10); i++) {
+            const row = rawArrays[i]
+            if (!row) continue
+
+            const rowValues = row.map(v => String(v || '').toUpperCase().trim())
+            // Check if this row contains our expected headers
+            const hasUraian = rowValues.some(v => v === 'URAIAN' || v === 'NAMA' || v === 'ITEM')
+            const hasQty = rowValues.some(v => v === 'QTY' || v === 'QUANTITY' || v === 'JUMLAH')
+            const hasSupplier = rowValues.some(v => v === 'SUPPLIER' || v === 'VENDOR')
+
+            if (hasUraian && hasQty && hasSupplier) {
+                headerRowIndex = i
+                console.log(`[Parser] Found header row at index ${i}:`, rowValues)
+                break
+            }
+        }
+
+        if (headerRowIndex === -1) {
+            console.log('[Parser] Could not find header row, trying default parsing')
+            // Fall back to default parsing
+            headerRowIndex = 0
+        }
+
+        // Get headers from the header row
+        const headerRow = rawArrays[headerRowIndex]
+        console.log('[Parser] Header row values:', headerRow)
+
+        // Get data starting from headerRowIndex + 1
+        const dataRows = rawArrays.slice(headerRowIndex + 1)
+        console.log('[Parser] Data rows count:', dataRows.length)
+
+        // Convert to objects using the header
+        const rawData = dataRows.map(row => {
+            const obj: any = {}
+            headerRow.forEach((header: string, idx: number) => {
+                if (header) {
+                    obj[header] = row ? row[idx] : undefined
+                }
+            })
+            return obj
+        })
+
+        if (rawData.length === 0) {
+            return {
+                success: false,
+                error: 'File Excel kosong atau format tidak sesuai',
+            }
+        }
+
+        console.log('[Parser] Column names after header detection:', Object.keys(rawData[0] as any))
+        console.log('[Parser] Total rows to process:', rawData.length)
 
 
         // Validate and transform data
         const validRows: ExcelRow[] = []
         const invalidRows: Array<{ row: number; errors: string[] }> = []
 
-        console.log('[Parser] Raw data rows:', rawData.length)
         console.log('[Parser] First row sample:', JSON.stringify(rawData[0]))
 
         rawData.forEach((row, index) => {
