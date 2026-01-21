@@ -7,6 +7,14 @@ import { JayamenTemplate } from './templates/jayamen-template'
 import { UndiYuwonoTemplate } from './templates/undi-yuwono-template'
 import { SekarWijayakusumaTemplate } from './templates/sekar-wijayakusuma-template'
 
+// Helper to sanitize filename (remove/replace invalid characters)
+function sanitizeFilename(name: string): string {
+    return name
+        .replace(/[\/\\:*?"<>|]/g, '-')  // Replace invalid chars with dash
+        .replace(/\s+/g, ' ')             // Normalize spaces
+        .trim()
+}
+
 export interface PDFGenerationOptions {
     invoiceDate: Date
     batchName?: string
@@ -196,17 +204,19 @@ export async function downloadAsZip(pdfs: GeneratedPDF[], filename: string) {
 export async function downloadAllPDFs(pdfs: GeneratedPDF[], batchName?: string) {
     if (pdfs.length === 0) return
 
+    const safeBatchName = batchName ? sanitizeFilename(batchName) : null
+
     if (pdfs.length === 1) {
         // Download single file
         const pdf = pdfs[0]
-        const filename = batchName
-            ? `${batchName}-${pdf.supplier}-${pdf.invoiceNumber}.pdf`
+        const filename = safeBatchName
+            ? `${safeBatchName}-${pdf.supplier}-${pdf.invoiceNumber}.pdf`
             : `Invoice-${pdf.supplier}-${pdf.invoiceNumber}.pdf`
         downloadPDF(pdfs[0].blob, filename)
     } else {
         // Download as ZIP
-        const zipFilename = batchName
-            ? `Invoices-${batchName}.zip`
+        const zipFilename = safeBatchName
+            ? `Invoices-${safeBatchName}.zip`
             : `Invoices-${format(new Date(), 'yyyy-MM-dd')}.zip`
 
         await downloadAsZip(pdfs, zipFilename)

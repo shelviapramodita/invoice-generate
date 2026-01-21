@@ -12,6 +12,14 @@ import {
 } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 
+// Helper to sanitize filename (remove/replace invalid characters)
+function sanitizeFilename(name: string): string {
+    return name
+        .replace(/[\/\\:*?"<>|]/g, '-')  // Replace invalid chars with dash
+        .replace(/\s+/g, ' ')             // Normalize spaces
+        .trim()
+}
+
 interface FullScreenPDFPreviewProps {
     open: boolean
     onClose: () => void
@@ -71,8 +79,9 @@ export function FullScreenPDFPreview({
         setDownloading(true)
         try {
             const { downloadPDF } = await import('@/lib/pdf/pdf-generator')
-            const filename = batchName
-                ? `${batchName}-${selectedPdf.supplier}-${selectedPdf.invoiceNumber}.pdf`
+            const safeBatchName = batchName ? sanitizeFilename(batchName) : null
+            const filename = safeBatchName
+                ? `${safeBatchName}-${selectedPdf.supplier}-${selectedPdf.invoiceNumber}.pdf`
                 : `Invoice-${selectedPdf.supplier}-${selectedPdf.invoiceNumber}.pdf`
             console.log('Download filename:', filename)
             downloadPDF(selectedPdf.blob, filename)
@@ -90,8 +99,9 @@ export function FullScreenPDFPreview({
         setDownloading(true)
         try {
             const { mergePDFs } = await import('@/lib/pdf/pdf-generator')
-            const filename = batchName
-                ? `${batchName}-All-Invoices-Merged.pdf`
+            const safeBatchName = batchName ? sanitizeFilename(batchName) : null
+            const filename = safeBatchName
+                ? `${safeBatchName}-All-Invoices-Merged.pdf`
                 : `All-Invoices-Merged.pdf`
             console.log('Merged filename:', filename)
             await mergePDFs(pdfs, filename)
