@@ -39,6 +39,35 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
         const invalidRows: Array<{ row: number; errors: string[] }> = []
 
         rawData.forEach((row, index) => {
+            const rowObj = row as any
+
+            // Skip category header rows (SEMBAKO, BUAH, SAYUR & PROTEIN, etc.)
+            // These rows typically only have URAIAN filled with category name
+            const uraian = rowObj.URAIAN?.toString().trim().toUpperCase() || ''
+            const isCategoryHeader = (
+                uraian === 'SEMBAKO' ||
+                uraian === 'BUAH' ||
+                uraian === 'SAYUR & PROTEIN' ||
+                uraian === 'SAYUR' ||
+                uraian === 'PROTEIN' ||
+                uraian === 'SNACK' ||
+                uraian === 'MINUMAN' ||
+                uraian === 'BUMBU' ||
+                uraian === 'LAINNYA' ||
+                uraian === 'REMPAH' ||
+                uraian === 'KERING' ||
+                uraian === 'SEGAR'
+            )
+
+            // Skip TOTAL rows - rows where URAIAN is "TOTAL" or empty with TOTAL value
+            const isTotalRow = uraian === 'TOTAL' || uraian === ''
+
+            // Skip if category header or total row
+            if (isCategoryHeader || isTotalRow) {
+                console.log(`[Parser] Skipping row ${index + 2}: ${uraian || '(empty)'}`)
+                return
+            }
+
             try {
                 // Validate row against schema
                 const validated = excelRowSchema.parse(row)

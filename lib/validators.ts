@@ -1,14 +1,43 @@
 import { z } from 'zod'
 
 /**
+ * Helper to parse Rp-formatted string to number
+ * Examples: "Rp3.000" -> 3000, "Rp1.966.500" -> 1966500
+ */
+function parseRupiahToNumber(value: unknown): number {
+    if (typeof value === 'number') return value
+    if (typeof value !== 'string') return NaN
+
+    // Remove "Rp" prefix and thousand separators (.)
+    const cleaned = value
+        .replace(/^Rp\.?\s*/i, '')
+        .replace(/\./g, '')
+        .replace(/,/g, '.')
+        .trim()
+
+    return parseFloat(cleaned) || 0
+}
+
+/**
  * Schema untuk validasi row Excel
+ * More flexible to handle various formats
  */
 export const excelRowSchema = z.object({
+    NO: z.any().optional(), // Ignore NO column
     URAIAN: z.string().min(1, 'URAIAN tidak boleh kosong'),
-    QTY: z.number().positive('QTY harus lebih dari 0'),
-    HARGA: z.number().nonnegative('HARGA tidak boleh negatif'),
+    QTY: z.preprocess(
+        (val) => typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val,
+        z.number().positive('QTY harus lebih dari 0')
+    ),
+    HARGA: z.preprocess(
+        parseRupiahToNumber,
+        z.number().nonnegative('HARGA tidak boleh negatif')
+    ),
     SATUAN: z.string().min(1, 'SATUAN tidak boleh kosong'),
-    TOTAL: z.number().nonnegative('TOTAL tidak boleh negatif'),
+    TOTAL: z.preprocess(
+        parseRupiahToNumber,
+        z.number().nonnegative('TOTAL tidak boleh negatif')
+    ),
     SUPPLIER: z.string().min(1, 'SUPPLIER tidak boleh kosong'),
 })
 
@@ -54,3 +83,4 @@ export function normalizeSupplierName(supplierName: string): string {
 
     return supplierName.trim()
 }
+
