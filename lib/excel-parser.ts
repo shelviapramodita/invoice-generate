@@ -7,65 +7,121 @@ interface ParseResult {
     data?: ParsedExcelData
     error?: string
     invalidRows?: Array<{ row: number; errors: string[] }>
+    skippedRows?: number
+}
+
+// Required columns for invoice data
+const REQUIRED_COLUMNS = ['URAIAN', 'QTY', 'HARGA', 'SATUAN', 'TOTAL', 'SUPPLIER']
+
+// Patterns to detect non-data rows (categories, totals, notes)
+const SKIP_PATTERNS = [
+    /^(SEMBAKO|BUAH|SAYUR|PROTEIN|DAGING|BUMBU|REMPAH|MINUMAN|SNACK|LAINNYA)/i,
+    /^TOTAL\s*$/i,
+    /^NO\s*REK/i,
+    /^(NO|NOMOR)$/i,
+    /^PENGELUARAN/i,
+    /^KATEGORI/i,
+    /^\d+$/,  // Just a number (row numbers)
+]
+
+/**
+ * Check if a row should be skipped (category, total, etc.)
+ */
+function shouldSkipRow(row: Record<string, unknown>): boolean {
+    const values = Object.values(row)
+    
+    // Skip if only 1-2 values (likely category or total row)
+    const nonEmptyValues = values.filter(v => v !== null && v !== undefined && v !== '')
+    if (nonEmptyValues.length <= 2) {
+        // Check if any value matches skip patterns
+        for (const val of nonEmptyValues) {
+            const strVal = String(val).trim()
+            if (SKIP_PATTERNS.some(pattern => pattern.test(strVal))) {
+                return true
+            }
+        }
+    }
+    
+    // Skip rows that look like headers within data
+    const firstVal = String(values[0] || '').trim().toUpperCase()
+    if (['NO', 'NOMOR', 'URAIAN', 'NAMA BARANG'].includes(firstVal)) {
+        return true
+    }
+    
+    return false
 }
 
 /**
- * Normalize column names to expected format
- * Handles various naming conventions in Excel files
+ * Find the header row and create column mapping
  */
-function normalizeColumnNames(row: any): any {
-    const normalized: any = {}
-
-    // Column name mappings (lowercase key -> standard name)
-    const columnMappings: Record<string, string> = {
-        // URAIAN variations
-        'uraian': 'URAIAN',
-        'nama': 'URAIAN',
-        'nama barang': 'URAIAN',
-        'nama item': 'URAIAN',
-        'item': 'URAIAN',
-        'description': 'URAIAN',
-        'deskripsi': 'URAIAN',
-        'barang': 'URAIAN',
-        // QTY variations
-        'qty': 'QTY',
-        'quantity': 'QTY',
-        'jumlah': 'QTY',
-        'jml': 'QTY',
-        'kuantitas': 'QTY',
-        // HARGA variations
-        'harga': 'HARGA',
-        'price': 'HARGA',
-        'harga satuan': 'HARGA',
-        'unit price': 'HARGA',
-        // SATUAN variations
-        'satuan': 'SATUAN',
-        'unit': 'SATUAN',
-        'uom': 'SATUAN',
-        // TOTAL variations
-        'total': 'TOTAL',
-        'jumlah harga': 'TOTAL',
-        'amount': 'TOTAL',
-        'subtotal': 'TOTAL',
-        // SUPPLIER variations
-        'supplier': 'SUPPLIER',
-        'vendor': 'SUPPLIER',
-        'nama supplier': 'SUPPLIER',
-        'pemasok': 'SUPPLIER',
-        // NO (optional - will be ignored)
-        'no': 'NO',
-        'no.': 'NO',
-        'nomor': 'NO',
-        'number': 'NO',
+function findHeaderAndCreateMapping(rawRows: unknown[][]): { headerRowIndex: number; columnMap: Record<string, number> } | null {
+    for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+        const row = rawRows[i]
+        if (!row) continue
+        
+        const columnMap: Record<string, number> = {}
+        let foundColumns = 0
+        
+        row.forEach((cell, colIndex) => {
+            const cellStr = String(cell || '').trim().toUpperCase()
+            
+            // Match column names (with variations)
+            if (cellStr === 'URAIAN' || cellStr === 'NAMA BARANG' || cellStr === 'NAMA' || cellStr === 'ITEM') {
+                columnMap['URAIAN'] = colIndex
+                foundColumns++
+            } else if (cellStr === 'QTY' || cellStr === 'QUANTITY' || cellStr === 'JUMLAH') {
+                columnMap['QTY'] = colIndex
+                foundColumns++
+            } else if (cellStr === 'HARGA' || cellStr === 'HARGA SATUAN' || cellStr === 'PRICE') {
+                columnMap['HARGA'] = colIndex
+                foundColumns++
+            } else if (cellStr === 'SATUAN' || cellStr === 'UNIT') {
+                columnMap['SATUAN'] = colIndex
+                foundColumns++
+            } else if (cellStr === 'TOTAL' || cellStr === 'JUMLAH HARGA' || cellStr === 'SUBTOTAL') {
+                columnMap['TOTAL'] = colIndex
+                foundColumns++
+            } else if (cellStr === 'SUPPLIER' || cellStr === 'VENDOR' || cellStr === 'PEMASOK') {
+                columnMap['SUPPLIER'] = colIndex
+                foundColumns++
+            }
+        })
+        
+        // Found header if we have at least 4 required columns
+        if (foundColumns >= 4) {
+            return { headerRowIndex: i, columnMap }
+        }
     }
+    
+    return null
+}
 
-    for (const [key, value] of Object.entries(row)) {
-        const normalizedKey = key.toString().trim().toLowerCase()
-        const mappedKey = columnMappings[normalizedKey] || key
-        normalized[mappedKey] = value
+/**
+ * Transform raw row array to ExcelRow object using column mapping
+ */
+function transformRowToExcelRow(row: unknown[], columnMap: Record<string, number>): Partial<ExcelRow> {
+    return {
+        URAIAN: columnMap['URAIAN'] !== undefined ? String(row[columnMap['URAIAN']] || '').trim() : '',
+        QTY: columnMap['QTY'] !== undefined ? Number(row[columnMap['QTY']]) || 0 : 0,
+        HARGA: columnMap['HARGA'] !== undefined ? Number(row[columnMap['HARGA']]) || 0 : 0,
+        SATUAN: columnMap['SATUAN'] !== undefined ? String(row[columnMap['SATUAN']] || '').trim() : '',
+        TOTAL: columnMap['TOTAL'] !== undefined ? Number(row[columnMap['TOTAL']]) || 0 : 0,
+        SUPPLIER: columnMap['SUPPLIER'] !== undefined ? String(row[columnMap['SUPPLIER']] || '').trim() : '',
     }
+}
 
-    return normalized
+/**
+ * Check if row has valid data (not empty for required fields)
+ */
+function isValidDataRow(row: Partial<ExcelRow>): boolean {
+    return !!(
+        row.URAIAN && 
+        row.URAIAN.length > 0 &&
+        row.QTY && 
+        row.QTY > 0 &&
+        row.SUPPLIER && 
+        row.SUPPLIER.length > 0
+    )
 }
 
 /**
@@ -83,124 +139,82 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
         const firstSheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[firstSheetName]
 
-        // Get raw array of arrays to find the header row
-        const rawArrays: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+        // Get raw data as 2D array first to find headers
+        const rawRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
 
-        if (rawArrays.length === 0) {
+        if (rawRows.length === 0) {
             return {
                 success: false,
                 error: 'File Excel kosong atau tidak memiliki data',
             }
         }
 
-        // Find the header row by looking for row that contains URAIAN, QTY, etc
-        let headerRowIndex = -1
-        for (let i = 0; i < Math.min(rawArrays.length, 10); i++) {
-            const row = rawArrays[i]
-            if (!row) continue
-
-            const rowValues = row.map(v => String(v || '').toUpperCase().trim())
-            // Check if this row contains our expected headers
-            const hasUraian = rowValues.some(v => v === 'URAIAN' || v === 'NAMA' || v === 'ITEM')
-            const hasQty = rowValues.some(v => v === 'QTY' || v === 'QUANTITY' || v === 'JUMLAH')
-            const hasSupplier = rowValues.some(v => v === 'SUPPLIER' || v === 'VENDOR')
-
-            if (hasUraian && hasQty && hasSupplier) {
-                headerRowIndex = i
-                console.log(`[Parser] Found header row at index ${i}:`, rowValues)
-                break
-            }
-        }
-
-        if (headerRowIndex === -1) {
-            console.log('[Parser] Could not find header row, trying default parsing')
-            // Fall back to default parsing
-            headerRowIndex = 0
-        }
-
-        // Get headers from the header row
-        const headerRow = rawArrays[headerRowIndex]
-        console.log('[Parser] Header row values:', headerRow)
-
-        // Get data starting from headerRowIndex + 1
-        const dataRows = rawArrays.slice(headerRowIndex + 1)
-        console.log('[Parser] Data rows count:', dataRows.length)
-
-        // Convert to objects using the header
-        const rawData = dataRows.map(row => {
-            const obj: any = {}
-            headerRow.forEach((header: string, idx: number) => {
-                if (header) {
-                    obj[header] = row ? row[idx] : undefined
-                }
-            })
-            return obj
-        })
-
-        if (rawData.length === 0) {
+        // Find header row and create column mapping
+        const headerResult = findHeaderAndCreateMapping(rawRows)
+        
+        if (!headerResult) {
             return {
                 success: false,
-                error: 'File Excel kosong atau format tidak sesuai',
+                error: 'Tidak dapat menemukan header kolom yang valid. Pastikan file memiliki kolom: URAIAN, QTY, HARGA, SATUAN, TOTAL, SUPPLIER',
             }
         }
 
-        console.log('[Parser] Column names after header detection:', Object.keys(rawData[0] as any))
-        console.log('[Parser] Total rows to process:', rawData.length)
-
-
-        // Validate and transform data
+        const { headerRowIndex, columnMap } = headerResult
+        
+        // Process data rows (after header)
         const validRows: ExcelRow[] = []
         const invalidRows: Array<{ row: number; errors: string[] }> = []
+        let skippedRows = 0
 
-        console.log('[Parser] First row sample:', JSON.stringify(rawData[0]))
-
-        rawData.forEach((row, index) => {
-            // Normalize column names first
-            const rowObj = normalizeColumnNames(row)
-
-            // Get URAIAN value for checking
-            const uraian = rowObj.URAIAN?.toString().trim().toUpperCase() || ''
-
-            // Skip category header rows (SEMBAKO, BUAH, SAYUR & PROTEIN, etc.)
-            const categoryHeaders = [
-                'SEMBAKO', 'BUAH', 'SAYUR & PROTEIN', 'SAYUR', 'PROTEIN',
-                'SNACK', 'MINUMAN', 'BUMBU', 'LAINNYA', 'REMPAH', 'KERING', 'SEGAR'
-            ]
-            const isCategoryHeader = categoryHeaders.includes(uraian)
-
-            // Skip TOTAL rows (where URAIAN is exactly "TOTAL")
-            const isTotalRow = uraian === 'TOTAL'
-
-            // Skip if category header or total row
-            if (isCategoryHeader || isTotalRow) {
-                console.log(`[Parser] Skipping row ${index + 2}: "${uraian}" (category/total)`)
-                return
+        for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
+            const rawRow = rawRows[i]
+            if (!rawRow || rawRow.length === 0) {
+                skippedRows++
+                continue
             }
 
-            // Skip completely empty rows (no data at all)
-            const hasAnyData = Object.values(rowObj).some(v => v !== undefined && v !== null && v !== '')
-            if (!hasAnyData) {
-                console.log(`[Parser] Skipping row ${index + 2}: empty row`)
-                return
+            // Create a temporary object to check if should skip
+            const tempObj: Record<string, unknown> = {}
+            rawRow.forEach((val, idx) => {
+                tempObj[`col${idx}`] = val
+            })
+            
+            // Also add first column value for pattern checking
+            const firstCellValue = rawRow[0]
+            if (firstCellValue !== undefined && firstCellValue !== null) {
+                tempObj['__first'] = firstCellValue
+            }
+            
+            // Check if this is a non-data row (category, total, etc.)
+            if (shouldSkipRow(tempObj)) {
+                skippedRows++
+                continue
+            }
+
+            // Transform to ExcelRow format using column mapping
+            const transformedRow = transformRowToExcelRow(rawRow, columnMap)
+            
+            // Skip rows that don't have valid data
+            if (!isValidDataRow(transformedRow)) {
+                skippedRows++
+                continue
             }
 
             try {
-                // Validate normalized row against schema
-                const validated = excelRowSchema.parse(rowObj)
+                // Validate row against schema
+                const validated = excelRowSchema.parse(transformedRow)
                 validRows.push(validated as ExcelRow)
-                console.log(`[Parser] Valid row ${index + 2}: ${rowObj.URAIAN}`)
             } catch (error: any) {
-                const errors = error.errors?.map((e: any) => `${e.path?.join('.')}: ${e.message}`) || ['Invalid data format']
-                console.log(`[Parser] Invalid row ${index + 2}:`, errors)
-                invalidRows.push({ row: index + 2, errors }) // +2 karena header di row 1
+                const errors = error.errors?.map((e: any) => e.message) || ['Format data tidak valid']
+                invalidRows.push({ row: i + 1, errors }) // +1 for 1-indexed Excel row
             }
-        })
+        }
 
-        // If too many invalid rows, return error
-        if (invalidRows.length > rawData.length * 0.3) {
+        // Check if we have any valid data
+        if (validRows.length === 0) {
             return {
                 success: false,
-                error: `Terlalu banyak data invalid (${invalidRows.length}/${rawData.length} rows)`,
+                error: 'Tidak ada data valid yang ditemukan. Pastikan data memiliki kolom yang sesuai.',
                 invalidRows,
             }
         }
@@ -229,6 +243,7 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             success: true,
             data: groupedData,
             invalidRows: invalidRows.length > 0 ? invalidRows : undefined,
+            skippedRows: skippedRows > 0 ? skippedRows : undefined,
         }
     } catch (error: any) {
         return {
