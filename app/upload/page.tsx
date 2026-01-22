@@ -49,6 +49,33 @@ export default function UploadPage() {
     const handleGenerate = async () => {
         if (!parsedData) return
 
+        // Save all customer names to localStorage before generating
+        const STORAGE_KEY = 'recent-customer-names'
+        const MAX_RECENT = 5
+        const stored = localStorage.getItem(STORAGE_KEY)
+        let recentNames: string[] = []
+        
+        if (stored) {
+            try {
+                recentNames = JSON.parse(stored)
+            } catch (e) {
+                recentNames = []
+            }
+        }
+
+        // Add all current customer names to recent history
+        Object.values(customerNames).forEach((name) => {
+            if (name && name.trim().length >= 2) {
+                const trimmedName = name.trim()
+                // Remove if exists and add to front
+                recentNames = [trimmedName, ...recentNames.filter(n => n !== trimmedName)]
+            }
+        })
+
+        // Keep only max 5 recent names
+        recentNames = recentNames.slice(0, MAX_RECENT)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(recentNames))
+
         setGenerating(true)
 
         try {

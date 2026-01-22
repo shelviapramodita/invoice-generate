@@ -83,6 +83,8 @@ export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInp
     const handleSuggestionClick = (name: string) => {
         onChange(name)
         setShowSuggestions(false)
+        // Save to recent immediately when clicking a suggestion
+        saveToRecent(name)
     }
 
     // Handle input focus
