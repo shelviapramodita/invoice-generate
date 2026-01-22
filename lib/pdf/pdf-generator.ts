@@ -133,14 +133,22 @@ export async function generateInvoicePDFsWithNumbers(
 
 /**
  * Download a single PDF
+ * Uses file-saver for better cross-browser filename support (especially Safari/Arc)
  */
 export function downloadPDF(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.click()
-    URL.revokeObjectURL(url)
+    import('file-saver').then(({ saveAs }) => {
+        saveAs(blob, filename)
+    }).catch(() => {
+        // Fallback to native method if file-saver fails
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+    })
 }
 
 /**

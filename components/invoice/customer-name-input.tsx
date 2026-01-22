@@ -51,7 +51,7 @@ export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInp
 
         const trimmedName = name.trim()
         const updated = [trimmedName, ...recentNames.filter(n => n !== trimmedName)].slice(0, MAX_RECENT)
-        
+
         setRecentNames(updated)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
     }
@@ -62,8 +62,8 @@ export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInp
         onChange(newValue)
 
         // Combine recent with defaults for filtering
-        const allSuggestions = recentNames.length > 0 
-            ? recentNames 
+        const allSuggestions = recentNames.length > 0
+            ? recentNames
             : DEFAULT_SUGGESTIONS
 
         // Filter suggestions based on input
@@ -90,8 +90,8 @@ export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInp
     // Handle input focus
     const handleFocus = () => {
         // Combine recent names with default suggestions (recent names first)
-        const allSuggestions = recentNames.length > 0 
-            ? recentNames 
+        const allSuggestions = recentNames.length > 0
+            ? recentNames
             : DEFAULT_SUGGESTIONS
 
         // Show all suggestions on focus if input is empty
@@ -145,10 +145,10 @@ export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInp
                     placeholder="Contoh: SPPG Pandansari"
                     className="w-full"
                 />
-                
-                {/* Suggestions Dropdown */}
+
+                {/* Suggestions Dropdown - Opens upward to prevent being overlayed */}
                 {showSuggestions && filteredSuggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md shadow-lg max-h-60 overflow-auto">
+                    <div className="absolute z-[100] w-full bottom-full mb-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md shadow-lg max-h-60 overflow-auto">
                         <div className="p-1">
                             <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground bg-neutral-50 dark:bg-neutral-800/50">
                                 <Clock className="h-3 w-3" />
