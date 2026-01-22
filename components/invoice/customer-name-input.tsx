@@ -14,6 +14,13 @@ interface CustomerNameInputProps {
 const STORAGE_KEY = 'recent-customer-names'
 const MAX_RECENT = 5
 
+// Common customer names as default suggestions
+const DEFAULT_SUGGESTIONS = [
+    'SPPG Pandansari',
+    'SPPG Tambak',
+    'SPPG Sumberejo',
+]
+
 export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInputProps) {
     const [recentNames, setRecentNames] = useState<string[]>([])
     const [showSuggestions, setShowSuggestions] = useState(false)
@@ -30,7 +37,11 @@ export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInp
                 setRecentNames(Array.isArray(parsed) ? parsed : [])
             } catch (e) {
                 console.error('Failed to parse recent customer names:', e)
+                setRecentNames([])
             }
+        } else {
+            // If no history, use default suggestions
+            setRecentNames([])
         }
     }, [])
 
@@ -50,16 +61,21 @@ export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInp
         const newValue = e.target.value
         onChange(newValue)
 
+        // Combine recent with defaults for filtering
+        const allSuggestions = recentNames.length > 0 
+            ? recentNames 
+            : DEFAULT_SUGGESTIONS
+
         // Filter suggestions based on input
         if (newValue.trim().length > 0) {
-            const filtered = recentNames.filter(name =>
+            const filtered = allSuggestions.filter(name =>
                 name.toLowerCase().includes(newValue.toLowerCase())
             )
             setFilteredSuggestions(filtered)
             setShowSuggestions(filtered.length > 0)
         } else {
-            setFilteredSuggestions(recentNames)
-            setShowSuggestions(recentNames.length > 0)
+            setFilteredSuggestions(allSuggestions)
+            setShowSuggestions(true)
         }
     }
 
@@ -71,10 +87,22 @@ export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInp
 
     // Handle input focus
     const handleFocus = () => {
-        if (recentNames.length > 0) {
-            setFilteredSuggestions(recentNames)
-            setShowSuggestions(true)
+        // Combine recent names with default suggestions (recent names first)
+        const allSuggestions = recentNames.length > 0 
+            ? recentNames 
+            : DEFAULT_SUGGESTIONS
+
+        // Show all suggestions on focus if input is empty
+        if (value.trim().length === 0) {
+            setFilteredSuggestions(allSuggestions)
+        } else {
+            // Filter based on current value
+            const filtered = allSuggestions.filter(name =>
+                name.toLowerCase().includes(value.toLowerCase())
+            )
+            setFilteredSuggestions(filtered)
         }
+        setShowSuggestions(true)
     }
 
     // Handle input blur - save to recent
@@ -118,22 +146,26 @@ export function CustomerNameInput({ supplier, value, onChange }: CustomerNameInp
                 
                 {/* Suggestions Dropdown */}
                 {showSuggestions && filteredSuggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md shadow-lg max-h-48 overflow-auto">
-                        <div className="p-2">
-                            <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
+                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md shadow-lg max-h-60 overflow-auto">
+                        <div className="p-1">
+                            <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground bg-neutral-50 dark:bg-neutral-800/50">
                                 <Clock className="h-3 w-3" />
-                                <span>Recently used</span>
+                                <span className="font-medium">
+                                    {recentNames.length > 0 ? 'Recently used' : 'Suggestions'}
+                                </span>
                             </div>
-                            {filteredSuggestions.map((name, index) => (
-                                <button
-                                    key={index}
-                                    type="button"
-                                    onClick={() => handleSuggestionClick(name)}
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-sm transition-colors"
-                                >
-                                    {name}
-                                </button>
-                            ))}
+                            <div className="py-1">
+                                {filteredSuggestions.map((name, index) => (
+                                    <button
+                                        key={index}
+                                        type="button"
+                                        onClick={() => handleSuggestionClick(name)}
+                                        className="w-full text-left px-3 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-sm transition-colors cursor-pointer"
+                                    >
+                                        {name}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}
