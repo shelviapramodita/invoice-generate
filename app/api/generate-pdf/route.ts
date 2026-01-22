@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
-        const { parsedData, invoiceDate, batchName, invoiceNumbers } = body
+        const { parsedData, invoiceDate, batchName, invoiceNumbers, customerNames } = body
 
         if (!parsedData) {
             return NextResponse.json(
@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
             invoiceDate: parsedDate,
             batchName,
             invoiceNumbers,
+            customerNames,
         })
 
         // Calculate summary for database

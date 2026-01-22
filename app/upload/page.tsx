@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ExcelUploader } from '@/components/excel/excel-uploader'
 import { InvoicePreview } from '@/components/invoice/invoice-preview'
 import { FullScreenPDFPreview } from '@/components/invoice/fullscreen-pdf-preview'
+import { CustomerNameInput } from '@/components/invoice/customer-name-input'
 import { ParsedExcelData } from '@/types'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
@@ -24,6 +25,7 @@ export default function UploadPage() {
     const [batchName, setBatchName] = useState<string>('')
     const [generating, setGenerating] = useState(false)
     const [invoiceNumbers, setInvoiceNumbers] = useState<Record<string, string>>({})
+    const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
     const [showPreview, setShowPreview] = useState(false)
     const [generatedPDFs, setGeneratedPDFs] = useState<any[]>([])
 
@@ -35,10 +37,13 @@ export default function UploadPage() {
 
         // Initialize invoice numbers with auto-increment
         const numbers: Record<string, string> = {}
+        const customers: Record<string, string> = {}
         Object.keys(data).forEach((supplier, index) => {
             numbers[supplier] = `#KWITANSI${String(index + 1).padStart(4, '0')}`
+            customers[supplier] = 'SPPG Pandansari' // Default customer name
         })
         setInvoiceNumbers(numbers)
+        setCustomerNames(customers)
     }
 
     const handleGenerate = async () => {
@@ -59,6 +64,7 @@ export default function UploadPage() {
                     invoiceDate: format(invoiceDate, 'yyyy-MM-dd'),
                     batchName: batchName || undefined,
                     invoiceNumbers,
+                    customerNames,
                 }),
             })
 
@@ -101,6 +107,7 @@ export default function UploadPage() {
         setGeneratedPDFs([])
         setBatchName('')
         setInvoiceNumbers({})
+        setCustomerNames({})
         setInvoiceDate(new Date())
     }
 
@@ -233,6 +240,27 @@ export default function UploadPage() {
                                     </div>
                                     <p className="text-xs text-muted-foreground">
                                         Setiap supplier akan mendapat nomor kwitansi yang berbeda
+                                    </p>
+                                </div>
+
+                                {/* Customer Names - Tagihan Kepada */}
+                                <div className="space-y-3 pt-4">
+                                    <Label>Tagihan Kepada (per Supplier)</Label>
+                                    <div className="space-y-2">
+                                        {Object.keys(parsedData).map((supplier) => (
+                                            <CustomerNameInput
+                                                key={supplier}
+                                                supplier={supplier}
+                                                value={customerNames[supplier] || ''}
+                                                onChange={(value) => setCustomerNames({
+                                                    ...customerNames,
+                                                    [supplier]: value
+                                                })}
+                                            />
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Nama mitra yang akan menerima tagihan invoice. Klik input untuk melihat mitra yang baru digunakan.
                                     </p>
                                 </div>
                             </CardContent>

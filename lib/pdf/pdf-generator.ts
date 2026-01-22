@@ -19,6 +19,7 @@ export interface PDFGenerationOptions {
     invoiceDate: Date
     batchName?: string
     customerName?: string
+    customerNames?: Record<string, string>
     invoiceNumbers?: Record<string, string>
 }
 
@@ -38,7 +39,10 @@ async function generatePDFForSupplier(
     customInvoiceNumber?: string
 ): Promise<GeneratedPDF> {
     const invoiceNumber = customInvoiceNumber || getNextInvoiceNumber()
-    const { invoiceDate, customerName } = options
+    const { invoiceDate, customerName, customerNames } = options
+    
+    // Use per-supplier customerName if available, otherwise use global customerName
+    const supplierCustomerName = customerNames?.[supplier] || customerName
 
     let template
 
@@ -48,21 +52,21 @@ async function generatePDFForSupplier(
             invoiceNumber,
             invoiceDate,
             items,
-            customerName,
+            customerName: supplierCustomerName,
         })
     } else if (supplier.includes('UNDI') || supplier.includes('YUWONO')) {
         template = UndiYuwonoTemplate({
             invoiceNumber,
             invoiceDate,
             items,
-            customerName,
+            customerName: supplierCustomerName,
         })
     } else if (supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
         template = SekarWijayakusumaTemplate({
             invoiceNumber,
             invoiceDate,
             items,
-            customerName,
+            customerName: supplierCustomerName,
         })
     } else {
         // Default to Jayamen template if supplier not recognized
@@ -70,7 +74,7 @@ async function generatePDFForSupplier(
             invoiceNumber,
             invoiceDate,
             items,
-            customerName,
+            customerName: supplierCustomerName,
         })
     }
 

@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
         color: '#666',
     },
     customerName: {
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: 'bold',
     },
     table: {
