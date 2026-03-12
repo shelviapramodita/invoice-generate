@@ -158,7 +158,12 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
                 body: JSON.stringify({ ids: idsToDelete }),
             })
 
-            const resData = await response.json()
+            // Safe JSON parsing
+            let resData: any = {}
+            const ct = response.headers.get('content-type')
+            if (ct && ct.includes('application/json')) {
+                resData = await response.json()
+            }
 
             if (!response.ok) {
                 throw new Error(resData.message || 'Failed to delete invoices')
