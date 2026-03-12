@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
-import { Eye, Trash2, Calendar, Package, FileSpreadsheet } from 'lucide-react'
+import { Eye, Trash2, Calendar, Package, FileSpreadsheet, CheckSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Table,
@@ -62,6 +62,14 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null)
 
+    // Multi-select state
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
+    const [bulkDeleting, setBulkDeleting] = useState(false)
+
+    // Ref for indeterminate checkbox state
+    const selectAllRef = useRef<HTMLButtonElement>(null)
+
     const handleView = (id: string) => {
         setSelectedId(id)
         setShowDetailView(true)
@@ -115,6 +123,74 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
         onRefresh?.()
     }
 
+    // Computed selection state
+    const isAllSelected = data.length > 0 && selectedIds.size === data.length
+    const isSomeSelected = selectedIds.size > 0 && selectedIds.size < data.length
+
+    // Sync indeterminate state on checkbox
+    useEffect(() => {
+        if (selectAllRef.current) {
+            const input = selectAllRef.current.querySelector('input[type="checkbox"]') as HTMLInputElement | null
+            if (input) {
+                input.indeterminate = isSomeSelected
+            }
+        }
+    }, [isSomeSelected])
+
+    // Multi-select handlers
+    const handleSelectAll = (checked: boolean | 'indeterminate') => {
+        if (checked === true) {
+            setSelectedIds(new Set(data.map(inv => inv.id)))
+        } else {
+            setSelectedIds(new Set())
+        }
+    }
+
+    const handleSelectOne = (id: string, checked: boolean) => {
+        const newSelected = new Set(selectedIds)
+        if (checked) {
+            newSelected.add(id)
+        } else {
+            newSelected.delete(id)
+        }
+        setSelectedIds(newSelected)
+    }
+
+    const handleBulkDeleteClick = () => {
+        setShowBulkDeleteConfirm(true)
+    }
+
+    const handleBulkDelete = async () => {
+        setBulkDeleting(true)
+        const idsToDelete = Array.from(selectedIds)
+
+        try {
+            const response = await fetch('/api/invoices/bulk-delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ ids: idsToDelete }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to delete invoices')
+            }
+
+            toast.success(`Berhasil menghapus ${data.deletedCount} invoice`)
+            setSelectedIds(new Set())
+            onRefresh?.()
+        } catch (error) {
+            console.error('Bulk delete error:', error)
+            toast.error(`Gagal menghapus invoice: ${(error as Error).message}`)
+        } finally {
+            setBulkDeleting(false)
+            setShowBulkDeleteConfirm(false)
+        }
+    }
+
     if (data.length === 0) {
         return (
             <div className="text-center py-12">
@@ -127,12 +203,51 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
         )
     }
 
+
     return (
         <>
+            {/* Bulk Actions Bar */}
+            {selectedIds.size > 0 && (
+                <div className="mb-4 flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <CheckSquare className="h-4 w-4 text-destructive" />
+                        <span className="text-sm font-semibold text-destructive">
+                            {selectedIds.size} invoice dipilih
+                        </span>
+                        <span className="text-sm text-muted-foreground">—</span>
+                        <button
+                            className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                            onClick={() => setSelectedIds(new Set())}
+                        >
+                            Batalkan pilihan
+                        </button>
+                    </div>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleBulkDeleteClick}
+                        disabled={bulkDeleting}
+                        className="gap-2"
+                    >
+                        <Trash2 className="h-4 w-4" />
+                        Hapus {selectedIds.size} Invoice
+                    </Button>
+                </div>
+            )}
+
             <div className="rounded-md border">
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-12">
+                                <Checkbox
+                                    ref={selectAllRef as any}
+                                    checked={isAllSelected}
+                                    onCheckedChange={handleSelectAll}
+                                    aria-label="Pilih semua invoice"
+                                    title={isAllSelected ? 'Batalkan semua' : isSomeSelected ? 'Batalkan semua' : 'Pilih semua'}
+                                />
+                            </TableHead>
                             <TableHead>Batch Name</TableHead>
                             <TableHead>Tanggal Invoice</TableHead>
                             <TableHead className="text-center">Suppliers</TableHead>
@@ -143,56 +258,69 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {data.map((invoice) => (
-                            <TableRow key={invoice.id}>
-                                <TableCell className="font-medium">
-                                    {invoice.batch_name || 'Untitled'}
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                                        {format(new Date(invoice.invoice_date), 'dd MMM yyyy', {
-                                            locale: id,
-                                        })}
-                                    </div>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                    <Badge variant="outline">{invoice.total_suppliers}</Badge>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                    {invoice.total_items}
-                                </TableCell>
-                                <TableCell className="text-right font-medium">
-                                    {formatCurrency(invoice.grand_total)}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                    <Badge variant={getStatusColor(invoice.status)}>
-                                        {invoice.status}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <div className="flex justify-end gap-2">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            onClick={() => handleView(invoice.id)}
-                                            title="View Details"
-                                        >
-                                            <Eye className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            onClick={() => handleDeleteClick(invoice.id)}
-                                            disabled={deleting === invoice.id}
-                                            title="Delete Invoice"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        ))}
+                        {data.map((invoice) => {
+                            const isSelected = selectedIds.has(invoice.id)
+                            return (
+                                <TableRow
+                                    key={invoice.id}
+                                    className={isSelected ? 'bg-muted/50' : ''}
+                                >
+                                    <TableCell>
+                                        <Checkbox
+                                            checked={isSelected}
+                                            onCheckedChange={(checked) => handleSelectOne(invoice.id, checked as boolean)}
+                                            aria-label={`Select ${invoice.batch_name || 'invoice'}`}
+                                        />
+                                    </TableCell>
+                                    <TableCell className="font-medium">
+                                        {invoice.batch_name || 'Untitled'}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                                            {format(new Date(invoice.invoice_date), 'dd MMM yyyy', {
+                                                locale: id,
+                                            })}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <Badge variant="outline">{invoice.total_suppliers}</Badge>
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        {invoice.total_items}
+                                    </TableCell>
+                                    <TableCell className="text-right font-medium">
+                                        {formatCurrency(invoice.grand_total)}
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <Badge variant={getStatusColor(invoice.status)}>
+                                            {invoice.status}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => handleView(invoice.id)}
+                                                title="View Details"
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => handleDeleteClick(invoice.id)}
+                                                disabled={deleting === invoice.id}
+                                                title="Delete Invoice"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            )
+                        })}
                     </TableBody>
                 </Table>
             </div>
@@ -211,6 +339,16 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
                 onOpenChange={setShowDeleteConfirm}
                 onConfirm={handleDelete}
                 loading={deleting !== null}
+            />
+
+            {/* Bulk Delete Confirmation Dialog */}
+            <DeleteConfirmationDialog
+                open={showBulkDeleteConfirm}
+                onOpenChange={setShowBulkDeleteConfirm}
+                onConfirm={handleBulkDelete}
+                loading={bulkDeleting}
+                title="Hapus Multiple Invoice"
+                description={`Apakah Anda yakin ingin menghapus ${selectedIds.size} invoice? Tindakan ini tidak dapat dibatalkan.`}
             />
         </>
     )
