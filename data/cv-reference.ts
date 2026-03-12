@@ -19,7 +19,7 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         name: 'CV JAYAMEN',
         displayName: 'CV JAYAMEN',
         themeColor: '#84CC16', // Lime green
-        bankAccount: '0951810094',
+        bankAccount: '0951810694',
         bankName: 'BNI',
         address: 'Ajibarang',
         category: 'SEMBAKO',

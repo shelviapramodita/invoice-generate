@@ -295,7 +295,7 @@ export function JayamenTemplate({
                 <View style={styles.footer}>
                     <View style={styles.paymentInfo}>
                         <Text style={styles.paymentLabel}>INFO PEMBAYARAN</Text>
-                        <Text>BNI - 0951810094</Text>
+                        <Text>BNI - 0951810694</Text>
                     </View>
 
                     <View style={styles.signatureSection}>
