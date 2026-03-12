@@ -89,15 +89,17 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
         try {
             const response = await fetch(`/api/invoices/${id}`, { method: 'DELETE' })
 
-            // Safe JSON parsing — response bisa kosong (204 No Content)
+            // Safe JSON parsing — gunakan try-catch agar tidak error bila body kosong
             let responseData: any = {}
-            const contentType = response.headers.get('content-type')
-            if (contentType && contentType.includes('application/json')) {
-                responseData = await response.json()
+            try {
+                const text = await response.text()
+                if (text) responseData = JSON.parse(text)
+            } catch {
+                // body kosong atau bukan JSON — tidak masalah
             }
 
             if (!response.ok) {
-                throw new Error(responseData.message || 'Failed to delete')
+                throw new Error(responseData.message || `Gagal menghapus (status ${response.status})`)
             }
 
             toast.success('Invoice berhasil dihapus!')
@@ -158,15 +160,17 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
                 body: JSON.stringify({ ids: idsToDelete }),
             })
 
-            // Safe JSON parsing
+            // Safe JSON parsing — try-catch agar tidak error bila body kosong
             let resData: any = {}
-            const ct = response.headers.get('content-type')
-            if (ct && ct.includes('application/json')) {
-                resData = await response.json()
+            try {
+                const text = await response.text()
+                if (text) resData = JSON.parse(text)
+            } catch {
+                // body kosong atau bukan JSON — tidak masalah
             }
 
             if (!response.ok) {
-                throw new Error(resData.message || 'Failed to delete invoices')
+                throw new Error(resData.message || `Gagal menghapus (status ${response.status})`)
             }
 
             toast.success(`${resData.deletedCount} invoice berhasil dihapus`)
