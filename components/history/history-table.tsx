@@ -88,7 +88,13 @@ export function HistoryTable({ data, onRefresh }: HistoryTableProps) {
 
         try {
             const response = await fetch(`/api/invoices/${id}`, { method: 'DELETE' })
-            const responseData = await response.json()
+
+            // Safe JSON parsing — response bisa kosong (204 No Content)
+            let responseData: any = {}
+            const contentType = response.headers.get('content-type')
+            if (contentType && contentType.includes('application/json')) {
+                responseData = await response.json()
+            }
 
             if (!response.ok) {
                 throw new Error(responseData.message || 'Failed to delete')
