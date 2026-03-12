@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getInvoiceById, deleteInvoiceHistory } from '@/lib/db/queries'
 import { getSupabase } from '@/lib/supabase/client'
 
+// Pastikan route ini selalu dynamic dan tidak ter-cache di Vercel
+export const dynamic = 'force-dynamic'
+
 const supabase = getSupabase()
 
 // GET /api/invoices/[id] - Get invoice detail
@@ -250,7 +253,6 @@ export async function DELETE(
     try {
         const { id } = await params
 
-        // TODO: Also delete files from storage
         await deleteInvoiceHistory(id)
 
         return NextResponse.json({
