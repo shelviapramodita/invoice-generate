@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { HistoryTable } from '@/components/history/history-table'
 import { HistoryFilters, FilterState } from '@/components/history/history-filters'
-import { createClient } from '@/lib/supabase/client'
 
 interface InvoiceHistory {
     id: string
@@ -38,27 +37,24 @@ export default function HistoryPage() {
         setError(null)
 
         try {
-            const supabase = createClient()
-            const { data, error: fetchError } = await supabase
-                .from('invoice_history')
-                .select('*, invoice_items(supplier)')
-                .order('created_at', { ascending: false })
-                .limit(50)
+            const response = await fetch('/api/invoices')
 
-            if (fetchError) {
-                throw new Error(fetchError.message)
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}))
+                throw new Error(errorData.message || `HTTP error ${response.status}`)
             }
 
-            // Transform data to include suppliers array for easier filtering
-            const historyWithSuppliers = (data as any[]).map(item => ({
-                ...item,
-                suppliers: Array.from(new Set(item.invoice_items?.map((i: any) => i.supplier) || []))
-            }))
+            const result = await response.json()
 
-            setHistory(historyWithSuppliers as InvoiceHistory[])
+            if (!result.success) {
+                throw new Error(result.message || 'Gagal memuat history')
+            }
+
+            setHistory(result.data as InvoiceHistory[])
         } catch (err: unknown) {
             console.error('Error fetching history:', err)
-            setError(err instanceof Error ? err.message : 'Gagal memuat history')
+            const message = err instanceof Error ? err.message : 'Gagal memuat history'
+            setError(message)
         } finally {
             setLoading(false)
         }
