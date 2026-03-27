@@ -7,6 +7,24 @@ export const dynamic = 'force-dynamic'
 // GET /api/invoices - Get all invoice history
 export async function GET() {
     try {
+        // Validate env vars first
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('[API] Missing Supabase env vars:', {
+                hasUrl: !!supabaseUrl,
+                hasKey: !!supabaseKey,
+            })
+            return NextResponse.json(
+                {
+                    error: 'Server configuration error',
+                    message: 'NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY belum dikonfigurasi di Vercel environment variables.',
+                },
+                { status: 500 }
+            )
+        }
+
         const supabase = await createClient()
 
         const { data, error } = await supabase
@@ -16,10 +34,10 @@ export async function GET() {
             .limit(50)
 
         if (error) {
-            console.error('[API] Error fetching invoice history:', error)
+            console.error('[API] Supabase query error:', error)
             return NextResponse.json(
                 {
-                    error: 'Failed to fetch invoice history',
+                    error: 'Database error',
                     message: error.message,
                 },
                 { status: 500 }
@@ -37,10 +55,10 @@ export async function GET() {
             data: historyWithSuppliers,
         })
     } catch (error: any) {
-        console.error('[API] Error fetching invoice history:', error)
+        console.error('[API] Unexpected error:', error)
         return NextResponse.json(
             {
-                error: 'Failed to fetch invoice history',
+                error: 'Internal server error',
                 message: error.message || 'Unknown error',
             },
             { status: 500 }

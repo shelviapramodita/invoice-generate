@@ -37,11 +37,22 @@ export default function HistoryPage() {
         setError(null)
 
         try {
-            const response = await fetch('/api/invoices')
+            let response: Response
+            try {
+                response = await fetch('/api/invoices', { cache: 'no-store' })
+            } catch (networkErr: unknown) {
+                // Network error (DNS failure, no connection, CORS, etc)
+                const msg = networkErr instanceof Error ? networkErr.message : 'Network error'
+                throw new Error(`Tidak dapat menjangkau server: ${msg}`)
+            }
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}))
-                throw new Error(errorData.message || `HTTP error ${response.status}`)
+                let serverMsg = `HTTP ${response.status}`
+                try {
+                    const errData = await response.json()
+                    serverMsg = errData.message || errData.error || serverMsg
+                } catch { }
+                throw new Error(`Server error: ${serverMsg}`)
             }
 
             const result = await response.json()
