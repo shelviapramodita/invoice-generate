@@ -29,7 +29,7 @@ const SKIP_PATTERNS = [
  */
 function shouldSkipRow(row: Record<string, unknown>): boolean {
     const values = Object.values(row)
-    
+
     // Skip if only 1-2 values (likely category or total row)
     const nonEmptyValues = values.filter(v => v !== null && v !== undefined && v !== '')
     if (nonEmptyValues.length <= 2) {
@@ -41,13 +41,13 @@ function shouldSkipRow(row: Record<string, unknown>): boolean {
             }
         }
     }
-    
+
     // Skip rows that look like headers within data
     const firstVal = String(values[0] || '').trim().toUpperCase()
     if (['NO', 'NOMOR', 'URAIAN', 'NAMA BARANG'].includes(firstVal)) {
         return true
     }
-    
+
     return false
 }
 
@@ -58,13 +58,13 @@ function findHeaderAndCreateMapping(rawRows: unknown[][]): { headerRowIndex: num
     for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
         const row = rawRows[i]
         if (!row) continue
-        
+
         const columnMap: Record<string, number> = {}
         let foundColumns = 0
-        
+
         row.forEach((cell, colIndex) => {
             const cellStr = String(cell || '').trim().toUpperCase()
-            
+
             // Match column names (with variations)
             if (cellStr === 'URAIAN' || cellStr === 'NAMA BARANG' || cellStr === 'NAMA' || cellStr === 'ITEM') {
                 columnMap['URAIAN'] = colIndex
@@ -86,40 +86,135 @@ function findHeaderAndCreateMapping(rawRows: unknown[][]): { headerRowIndex: num
                 foundColumns++
             }
         })
-        
+
         // Found header if we have at least 4 required columns
         if (foundColumns >= 4) {
             return { headerRowIndex: i, columnMap }
         }
     }
-    
+
     return null
+}
+
+/**
+ * Parse a cell value to number — supports Indonesian number format.
+ * Indonesian: titik (.) = pemisah ribuan, koma (,) = desimal
+ * Contoh: "1.280" → 1280, "1.966.500" → 1966500, "1,5" → 1.5
+ */
+function parseCellToNumber(value: unknown): number {
+    // Jika sudah number dari XLSX (raw integer/float murni), langsung kembalikan
+    if (typeof value === 'number') {
+        // Jika angka bukan integer (e.g. 1.28 bukan 1280), kemungkinan salah parse
+        // Tapi kita tidak bisa tahu context-nya dari sini, kembalikan as-is
+        return value
+    }
+    if (value === null || value === undefined || value === '') return 0
+
+    const str = String(value).trim()
+
+    // Hapus prefix Rp
+    const cleaned = str.replace(/^Rp\.?\s*/i, '').trim()
+
+    return parseIndonesianNumber(cleaned)
+}
+
+/**
+ * Parse angka format Indonesia:
+ * - Titik (.) sebagai pemisah ribuan: "1.280" → 1280, "1.966.500" → 1966500
+ * - Koma (,) sebagai desimal: "1,5" → 1.5
+ * - Titik tunggal bisa jadi desimal: "1.5" → 1.5 (tapi "1.280" → 1280)
+ */
+function parseIndonesianNumber(str: string): number {
+    if (!str || str === '') return 0
+
+    const hasDot = str.includes('.')
+    const hasComma = str.includes(',')
+
+    if (hasDot && hasComma) {
+        // Keduanya ada: format seperti "1.966.500,50" atau "1,966,500.50"
+        // Deteksi: jika koma setelah titik terakhir → titik = ribuan, koma = desimal (ID format)
+        const lastDot = str.lastIndexOf('.')
+        const lastComma = str.lastIndexOf(',')
+        if (lastComma > lastDot) {
+            // ID format: "1.966.500,50"
+            const withoutThousands = str.replace(/\./g, '')
+            const withDecimal = withoutThousands.replace(',', '.')
+            const n = parseFloat(withDecimal)
+            return isNaN(n) ? 0 : n
+        } else {
+            // US format: "1,966,500.50"
+            const withoutThousands = str.replace(/,/g, '')
+            const n = parseFloat(withoutThousands)
+            return isNaN(n) ? 0 : n
+        }
+    }
+
+    if (hasDot && !hasComma) {
+        // Hanya titik: bisa ribuan ("1.280") atau desimal ("1.5")
+        // Jika setelah titik ada tepat 3 digit → ribuan
+        // Jika lebih dari satu titik → semua ribuan
+        const parts = str.split('.')
+        const isThousandSeparator =
+            parts.length > 2 || // lebih dari satu titik → pasti ribuan
+            (parts.length === 2 && parts[1].length === 3) // satu titik, 3 digit setelahnya → ribuan
+        if (isThousandSeparator) {
+            const n = parseFloat(str.replace(/\./g, ''))
+            return isNaN(n) ? 0 : n
+        } else {
+            // Decimal: "1.5", "0.75"
+            const n = parseFloat(str)
+            return isNaN(n) ? 0 : n
+        }
+    }
+
+    if (!hasDot && hasComma) {
+        // Hanya koma: bisa ribuan ("1,280") atau desimal ("1,5")
+        const parts = str.split(',')
+        const isThousandSeparator =
+            parts.length > 2 ||
+            (parts.length === 2 && parts[1].length === 3)
+        if (isThousandSeparator) {
+            const n = parseFloat(str.replace(/,/g, ''))
+            return isNaN(n) ? 0 : n
+        } else {
+            // Decimal: "1,5"
+            const n = parseFloat(str.replace(',', '.'))
+            return isNaN(n) ? 0 : n
+        }
+    }
+
+    // Tidak ada titik atau koma — angka murni
+    const n = parseFloat(str)
+    return isNaN(n) ? 0 : n
 }
 
 /**
  * Transform raw row array to ExcelRow object using column mapping
  */
 function transformRowToExcelRow(row: unknown[], columnMap: Record<string, number>): Partial<ExcelRow> {
+    const qty = columnMap['QTY'] !== undefined ? parseCellToNumber(row[columnMap['QTY']]) : 0
     return {
-        URAIAN: columnMap['URAIAN'] !== undefined ? String(row[columnMap['URAIAN']] || '').trim() : '',
-        QTY: columnMap['QTY'] !== undefined ? Number(row[columnMap['QTY']]) || 0 : 0,
-        HARGA: columnMap['HARGA'] !== undefined ? Number(row[columnMap['HARGA']]) || 0 : 0,
-        SATUAN: columnMap['SATUAN'] !== undefined ? String(row[columnMap['SATUAN']] || '').trim() : '',
-        TOTAL: columnMap['TOTAL'] !== undefined ? Number(row[columnMap['TOTAL']]) || 0 : 0,
-        SUPPLIER: columnMap['SUPPLIER'] !== undefined ? String(row[columnMap['SUPPLIER']] || '').trim() : '',
+        URAIAN: columnMap['URAIAN'] !== undefined ? String(row[columnMap['URAIAN']] ?? '').trim() : '',
+        QTY: qty,
+        HARGA: columnMap['HARGA'] !== undefined ? parseCellToNumber(row[columnMap['HARGA']]) : 0,
+        SATUAN: columnMap['SATUAN'] !== undefined ? String(row[columnMap['SATUAN']] ?? '').trim() : '',
+        TOTAL: columnMap['TOTAL'] !== undefined ? parseCellToNumber(row[columnMap['TOTAL']]) : 0,
+        SUPPLIER: columnMap['SUPPLIER'] !== undefined ? String(row[columnMap['SUPPLIER']] ?? '').trim() : '',
     }
 }
 
 /**
  * Check if row has valid data (not empty for required fields)
+ * URAIAN dan SUPPLIER wajib ada. QTY harus > 0 (items tanpa qty tidak valid).
+ * HARGA boleh 0 (bisa jadi gratis/sudah termasuk).
  */
 function isValidDataRow(row: Partial<ExcelRow>): boolean {
     return !!(
-        row.URAIAN && 
+        row.URAIAN &&
         row.URAIAN.length > 0 &&
-        row.QTY && 
+        typeof row.QTY === 'number' &&
         row.QTY > 0 &&
-        row.SUPPLIER && 
+        row.SUPPLIER &&
         row.SUPPLIER.length > 0
     )
 }
@@ -132,15 +227,17 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
         // Read file as ArrayBuffer
         const arrayBuffer = await file.arrayBuffer()
 
-        // Parse Excel
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+        // Parse Excel — raw:true agar angka dibaca sebagai number asli XLSX
+        // defval:null agar cell kosong jadi null (lebih mudah di-filter)
+        const workbook = XLSX.read(arrayBuffer, { type: 'array', raw: true, cellText: true })
 
         // Get first sheet
         const firstSheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[firstSheetName]
 
         // Get raw data as 2D array first to find headers
-        const rawRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+        // raw:false agar XLSX format angka sebagai string (mempertahankan format asli seperti "1.280")
+        const rawRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: null })
 
         if (rawRows.length === 0) {
             return {
@@ -151,7 +248,7 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
 
         // Find header row and create column mapping
         const headerResult = findHeaderAndCreateMapping(rawRows)
-        
+
         if (!headerResult) {
             return {
                 success: false,
@@ -160,11 +257,13 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
         }
 
         const { headerRowIndex, columnMap } = headerResult
-        
+
         // Process data rows (after header)
         const validRows: ExcelRow[] = []
         const invalidRows: Array<{ row: number; errors: string[] }> = []
         let skippedRows = 0
+
+        let lastValidSupplier = '' // Track last valid supplier for inheritance
 
         for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
             const rawRow = rawRows[i]
@@ -173,29 +272,42 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                 continue
             }
 
-            // Create a temporary object to check if should skip
+            // Create a temporary object to check if should skip (only actual columns, no duplicates)
             const tempObj: Record<string, unknown> = {}
             rawRow.forEach((val, idx) => {
                 tempObj[`col${idx}`] = val
             })
-            
-            // Also add first column value for pattern checking
-            const firstCellValue = rawRow[0]
-            if (firstCellValue !== undefined && firstCellValue !== null) {
-                tempObj['__first'] = firstCellValue
-            }
-            
+
             // Check if this is a non-data row (category, total, etc.)
             if (shouldSkipRow(tempObj)) {
+                console.log(`[Excel] Row ${i + 1} SKIPPED by shouldSkipRow:`, rawRow)
                 skippedRows++
                 continue
             }
 
             // Transform to ExcelRow format using column mapping
             const transformedRow = transformRowToExcelRow(rawRow, columnMap)
-            
+            console.log(`[Excel] Row ${i + 1} transformed:`, transformedRow)
+
+            // If SUPPLIER is empty, inherit from the last valid supplier row
+            // (common in Excel files where supplier is only filled once per group)
+            if (!transformedRow.SUPPLIER || transformedRow.SUPPLIER.length === 0) {
+                if (lastValidSupplier) {
+                    console.log(`[Excel] Row ${i + 1}: SUPPLIER kosong, inherit dari "${lastValidSupplier}"`)
+                    transformedRow.SUPPLIER = lastValidSupplier
+                }
+            } else {
+                lastValidSupplier = transformedRow.SUPPLIER
+            }
+
             // Skip rows that don't have valid data
             if (!isValidDataRow(transformedRow)) {
+                console.log(`[Excel] Row ${i + 1} SKIPPED by isValidDataRow:`, {
+                    URAIAN: transformedRow.URAIAN,
+                    QTY: transformedRow.QTY,
+                    SUPPLIER: transformedRow.SUPPLIER,
+                    SATUAN: transformedRow.SATUAN,
+                })
                 skippedRows++
                 continue
             }
@@ -203,9 +315,11 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             try {
                 // Validate row against schema
                 const validated = excelRowSchema.parse(transformedRow)
+                console.log(`[Excel] Row ${i + 1} VALID ✅ → ${transformedRow.URAIAN} (qty: ${transformedRow.QTY}, supplier: ${transformedRow.SUPPLIER})`)
                 validRows.push(validated as ExcelRow)
             } catch (error: any) {
                 const errors = error.errors?.map((e: any) => e.message) || ['Format data tidak valid']
+                console.log(`[Excel] Row ${i + 1} REJECTED by schema ❌:`, { row: transformedRow, errors })
                 invalidRows.push({ row: i + 1, errors }) // +1 for 1-indexed Excel row
             }
         }
