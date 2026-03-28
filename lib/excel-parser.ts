@@ -14,6 +14,8 @@ interface ParseResult {
 const REQUIRED_COLUMNS = ['URAIAN', 'QTY', 'HARGA', 'SATUAN', 'TOTAL', 'SUPPLIER']
 
 // Patterns to detect non-data rows (categories, totals, notes)
+// NOTE: /^\d+$/ removed on purpose — it caused valid item rows with only URAIAN+QTY
+// (2 cells) to be skipped because the numeric QTY matched the pattern.
 const SKIP_PATTERNS = [
     /^(SEMBAKO|BUAH|SAYUR|PROTEIN|DAGING|BUMBU|REMPAH|MINUMAN|SNACK|LAINNYA)/i,
     /^TOTAL\s*$/i,
@@ -21,7 +23,6 @@ const SKIP_PATTERNS = [
     /^(NO|NOMOR)$/i,
     /^PENGELUARAN/i,
     /^KATEGORI/i,
-    /^\d+$/,  // Just a number (row numbers)
 ]
 
 /**
@@ -30,10 +31,19 @@ const SKIP_PATTERNS = [
 function shouldSkipRow(row: Record<string, unknown>): boolean {
     const values = Object.values(row)
 
-    // Skip if only 1-2 values (likely category or total row)
     const nonEmptyValues = values.filter(v => v !== null && v !== undefined && v !== '')
+
+    // Skip rows that have zero meaningful data
+    if (nonEmptyValues.length === 0) return true
+
+    // Skip rows where the ONLY non-empty value is a pure number (standalone row numbers like "36")
+    if (nonEmptyValues.length === 1) {
+        const singleVal = String(nonEmptyValues[0]).trim()
+        if (/^\d+$/.test(singleVal)) return true
+    }
+
+    // For rows with very few values, check against skip patterns
     if (nonEmptyValues.length <= 2) {
-        // Check if any value matches skip patterns
         for (const val of nonEmptyValues) {
             const strVal = String(val).trim()
             if (SKIP_PATTERNS.some(pattern => pattern.test(strVal))) {
@@ -50,6 +60,7 @@ function shouldSkipRow(row: Record<string, unknown>): boolean {
 
     return false
 }
+
 
 /**
  * Find the header row and create column mapping
