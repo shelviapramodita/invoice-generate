@@ -163,6 +163,26 @@ export async function updateInvoiceHistory(
 export async function deleteInvoiceHistory(id: string) {
     const supabase = await createClient()
 
+    // Get PDF file paths before deleting
+    const { data: items, error: fetchError } = await supabase
+        .from('invoice_items')
+        .select('pdf_file_path')
+        .eq('history_id', id)
+
+    if (fetchError) {
+        console.error('Error fetching invoice items for deletion:', fetchError)
+        throw new Error(`Failed to fetch invoice items: ${fetchError.message}`)
+    }
+
+    // Collect unique PDF paths to delete
+    const pdfPaths = Array.from(
+        new Set(
+            items
+                ?.map(item => item.pdf_file_path)
+                .filter(path => path && path !== 'client-side-download')
+        ) || []
+    )
+
     // Delete items first (cascade should handle this, but explicit is safer)
     const { error: itemsError } = await supabase
         .from('invoice_items')
@@ -185,5 +205,84 @@ export async function deleteInvoiceHistory(id: string) {
         throw new Error(`Failed to delete invoice history: ${error.message}`)
     }
 
+    // Delete PDF files from storage
+    if (pdfPaths.length > 0) {
+        const { error: storageError } = await supabase.storage
+            .from('generated-pdfs')
+            .remove(pdfPaths)
+
+        if (storageError) {
+            console.error('Error deleting PDF files:', storageError)
+            // Don't throw - data already deleted, just log warning
+        }
+    }
+
     return { success: true }
+}
+
+/**
+ * Bulk delete invoice histories and all related items
+ */
+export async function bulkDeleteInvoiceHistory(ids: string[]) {
+    const supabase = await createClient()
+
+    if (!ids || ids.length === 0) {
+        throw new Error('No invoice IDs provided')
+    }
+
+    // Get all PDF file paths before deleting
+    const { data: items, error: fetchError } = await supabase
+        .from('invoice_items')
+        .select('pdf_file_path')
+        .in('history_id', ids)
+
+    if (fetchError) {
+        console.error('Error fetching invoice items for bulk deletion:', fetchError)
+        throw new Error(`Failed to fetch invoice items: ${fetchError.message}`)
+    }
+
+    // Collect unique PDF paths to delete
+    const pdfPaths = Array.from(
+        new Set(
+            items
+                ?.map(item => item.pdf_file_path)
+                .filter(path => path && path !== 'client-side-download')
+        ) || []
+    )
+
+    // Delete items first
+    const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .in('history_id', ids)
+
+    if (itemsError) {
+        console.error('Error bulk deleting invoice items:', itemsError)
+        throw new Error(`Failed to delete invoice items: ${itemsError.message}`)
+    }
+
+    // Delete invoice histories
+    const { error } = await supabase
+        .from('invoice_history')
+        .delete()
+        .in('id', ids)
+
+    if (error) {
+        console.error('Error bulk deleting invoice history:', error)
+        throw new Error(`Failed to delete invoice history: ${error.message}`)
+    }
+
+    // Delete PDF files from storage
+    if (pdfPaths.length > 0) {
+        const { error: storageError } = await supabase.storage
+            .from('generated-pdfs')
+            .remove(pdfPaths)
+
+        if (storageError) {
+            console.error('Error deleting PDF files:', storageError)
+            // Don't throw - data already deleted, just log warning
+        }
+    }
+
+    return { success: true, deletedCount: ids.length }
 }
