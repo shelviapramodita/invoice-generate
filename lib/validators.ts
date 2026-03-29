@@ -4,6 +4,7 @@ import { z } from 'zod'
  * Parse angka format Indonesia:
  * - Titik (.) sebagai pemisah ribuan: "1.280" → 1280, "1.966.500" → 1966500
  * - Koma (,) sebagai desimal: "1,5" → 1.5
+ * - Heuristic: Multiple separators → thousand sep. Single sep: check digit count (3 digits = thousand).
  */
 function parseIndonesianNumber(str: string): number {
     if (!str || str === '') return 0
@@ -25,10 +26,12 @@ function parseIndonesianNumber(str: string): number {
 
     if (hasDot && !hasComma) {
         const parts = str.split('.')
-        const isThousandSep =
-            parts.length > 2 ||
-            (parts.length === 2 && parts[1].length === 3)
-        if (isThousandSep) {
+        // Multiple dots → pasti thousand separator
+        if (parts.length > 2) {
+            return parseFloat(str.replace(/\./g, '')) || 0
+        }
+        // Single dot: check if digit after dot = 3 (thousand sep), otherwise decimal
+        if (parts.length === 2 && parts[1].length === 3 && /^\d+$/.test(parts[1])) {
             return parseFloat(str.replace(/\./g, '')) || 0
         }
         return parseFloat(str) || 0
@@ -36,10 +39,12 @@ function parseIndonesianNumber(str: string): number {
 
     if (!hasDot && hasComma) {
         const parts = str.split(',')
-        const isThousandSep =
-            parts.length > 2 ||
-            (parts.length === 2 && parts[1].length === 3)
-        if (isThousandSep) {
+        // Multiple commas → pasti thousand separator
+        if (parts.length > 2) {
+            return parseFloat(str.replace(/,/g, '')) || 0
+        }
+        // Single comma: check if digit after comma = 3 (thousand sep), otherwise decimal
+        if (parts.length === 2 && parts[1].length === 3 && /^\d+$/.test(parts[1])) {
             return parseFloat(str.replace(/,/g, '')) || 0
         }
         return parseFloat(str.replace(',', '.')) || 0

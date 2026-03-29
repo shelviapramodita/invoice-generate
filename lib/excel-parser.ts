@@ -14,8 +14,6 @@ interface ParseResult {
 const REQUIRED_COLUMNS = ['URAIAN', 'QTY', 'HARGA', 'SATUAN', 'TOTAL', 'SUPPLIER']
 
 // Patterns to detect non-data rows (categories, totals, notes)
-// NOTE: /^\d+$/ removed on purpose — it caused valid item rows with only URAIAN+QTY
-// (2 cells) to be skipped because the numeric QTY matched the pattern.
 const SKIP_PATTERNS = [
     /^(SEMBAKO|BUAH|SAYUR|PROTEIN|DAGING|BUMBU|REMPAH|MINUMAN|SNACK|LAINNYA)/i,
     /^TOTAL\s*$/i,
@@ -23,6 +21,7 @@ const SKIP_PATTERNS = [
     /^(NO|NOMOR)$/i,
     /^PENGELUARAN/i,
     /^KATEGORI/i,
+    /^\d+$/,  // Just a number (row numbers)
 ]
 
 /**
@@ -31,19 +30,10 @@ const SKIP_PATTERNS = [
 function shouldSkipRow(row: Record<string, unknown>): boolean {
     const values = Object.values(row)
 
+    // Skip if only 1-2 values (likely category or total row)
     const nonEmptyValues = values.filter(v => v !== null && v !== undefined && v !== '')
-
-    // Skip rows that have zero meaningful data
-    if (nonEmptyValues.length === 0) return true
-
-    // Skip rows where the ONLY non-empty value is a pure number (standalone row numbers like "36")
-    if (nonEmptyValues.length === 1) {
-        const singleVal = String(nonEmptyValues[0]).trim()
-        if (/^\d+$/.test(singleVal)) return true
-    }
-
-    // For rows with very few values, check against skip patterns
     if (nonEmptyValues.length <= 2) {
+        // Check if any value matches skip patterns
         for (const val of nonEmptyValues) {
             const strVal = String(val).trim()
             if (SKIP_PATTERNS.some(pattern => pattern.test(strVal))) {
@@ -60,7 +50,6 @@ function shouldSkipRow(row: Record<string, unknown>): boolean {
 
     return false
 }
-
 
 /**
  * Find the header row and create column mapping
@@ -100,6 +89,7 @@ function findHeaderAndCreateMapping(rawRows: unknown[][]): { headerRowIndex: num
 
         // Found header if we have at least 4 required columns
         if (foundColumns >= 4) {
+            console.log(`[Excel] Header found at row ${i + 1}, column mapping:`, columnMap)
             return { headerRowIndex: i, columnMap }
         }
     }
@@ -117,6 +107,7 @@ function parseCellToNumber(value: unknown): number {
     if (typeof value === 'number') {
         // Jika angka bukan integer (e.g. 1.28 bukan 1280), kemungkinan salah parse
         // Tapi kita tidak bisa tahu context-nya dari sini, kembalikan as-is
+        console.log(`[Parser] Cell value is already number: ${value}`)
         return value
     }
     if (value === null || value === undefined || value === '') return 0
@@ -126,14 +117,19 @@ function parseCellToNumber(value: unknown): number {
     // Hapus prefix Rp
     const cleaned = str.replace(/^Rp\.?\s*/i, '').trim()
 
-    return parseIndonesianNumber(cleaned)
+    const result = parseIndonesianNumber(cleaned)
+    if (str !== cleaned || result !== parseFloat(str)) {
+        console.log(`[Parser] Parsed "${str}" → "${cleaned}" → ${result}`)
+    }
+    return result
 }
 
 /**
  * Parse angka format Indonesia:
  * - Titik (.) sebagai pemisah ribuan: "1.280" → 1280, "1.966.500" → 1966500
  * - Koma (,) sebagai desimal: "1,5" → 1.5
- * - Titik tunggal bisa jadi desimal: "1.5" → 1.5 (tapi "1.280" → 1280)
+ * - Heuristic: Jika ada multiple thousand separators (e.g., "1.966.500"), pasti ribuan.
+ *   Jika hanya satu separator: gunakan konteks digit count untuk determin apakah ribuan atau desimal.
  */
 function parseIndonesianNumber(str: string): number {
     if (!str || str === '') return 0
@@ -162,36 +158,55 @@ function parseIndonesianNumber(str: string): number {
 
     if (hasDot && !hasComma) {
         // Hanya titik: bisa ribuan ("1.280") atau desimal ("1.5")
-        // Jika setelah titik ada tepat 3 digit → ribuan
-        // Jika lebih dari satu titik → semua ribuan
         const parts = str.split('.')
-        const isThousandSeparator =
-            parts.length > 2 || // lebih dari satu titik → pasti ribuan
-            (parts.length === 2 && parts[1].length === 3) // satu titik, 3 digit setelahnya → ribuan
-        if (isThousandSeparator) {
+        
+        // Multiple dots → pasti thousand separator (e.g., "1.234.567")
+        if (parts.length > 2) {
             const n = parseFloat(str.replace(/\./g, ''))
             return isNaN(n) ? 0 : n
-        } else {
-            // Decimal: "1.5", "0.75"
-            const n = parseFloat(str)
-            return isNaN(n) ? 0 : n
         }
+        
+        // Single dot case: "1.280" atau "1.5"
+        // Heuristic: jika digit setelah titik = 3 DAN semua digit, → thousand separator
+        if (parts.length === 2) {
+            const afterDot = parts[1]
+            // Cek: panjang tepat 3 DAN semuanya digit → kemungkinan besar ribuan
+            if (afterDot.length === 3 && /^\d+$/.test(afterDot)) {
+                const n = parseFloat(str.replace(/\./g, ''))
+                return isNaN(n) ? 0 : n
+            }
+        }
+        
+        // Fallback: treat as decimal
+        const n = parseFloat(str)
+        return isNaN(n) ? 0 : n
     }
 
     if (!hasDot && hasComma) {
         // Hanya koma: bisa ribuan ("1,280") atau desimal ("1,5")
         const parts = str.split(',')
-        const isThousandSeparator =
-            parts.length > 2 ||
-            (parts.length === 2 && parts[1].length === 3)
-        if (isThousandSeparator) {
+        
+        // Multiple commas → pasti thousand separator
+        if (parts.length > 2) {
             const n = parseFloat(str.replace(/,/g, ''))
             return isNaN(n) ? 0 : n
-        } else {
-            // Decimal: "1,5"
-            const n = parseFloat(str.replace(',', '.'))
-            return isNaN(n) ? 0 : n
         }
+        
+        // Single comma case: "1,280" atau "1,5"
+        if (parts.length === 2) {
+            const afterComma = parts[1]
+            // Jika digit setelah koma = 3 → thousand separator, otherwise decimal
+            if (afterComma.length === 3 && /^\d+$/.test(afterComma)) {
+                const n = parseFloat(str.replace(/,/g, ''))
+                return isNaN(n) ? 0 : n
+            } else {
+                // Decimal: "1,5"
+                const n = parseFloat(str.replace(',', '.'))
+                return isNaN(n) ? 0 : n
+            }
+        }
+        
+        return parseFloat(str.replace(',', '.')) || 0
     }
 
     // Tidak ada titik atau koma — angka murni
@@ -203,9 +218,22 @@ function parseIndonesianNumber(str: string): number {
  * Transform raw row array to ExcelRow object using column mapping
  */
 function transformRowToExcelRow(row: unknown[], columnMap: Record<string, number>): Partial<ExcelRow> {
-    const qty = columnMap['QTY'] !== undefined ? parseCellToNumber(row[columnMap['QTY']]) : 0
+    const qtyRaw = row[columnMap['QTY']]
+    const qty = columnMap['QTY'] !== undefined ? parseCellToNumber(qtyRaw) : 0
+    
+    const uraian = columnMap['URAIAN'] !== undefined ? String(row[columnMap['URAIAN']] ?? '').trim() : ''
+    
+    // Log detail untuk item tertentu (untuk debug)
+    if (uraian.includes('Diamond') || uraian.includes('Fullcream')) {
+        console.log(`[Transform] Row detail for "${uraian}":`)
+        console.log(`  QTY raw value: ${qtyRaw} (type: ${typeof qtyRaw})`)
+        console.log(`  QTY parsed: ${qty}`)
+        console.log(`  Full row data:`, row)
+        console.log(`  Column map:`, columnMap)
+    }
+    
     return {
-        URAIAN: columnMap['URAIAN'] !== undefined ? String(row[columnMap['URAIAN']] ?? '').trim() : '',
+        URAIAN: uraian,
         QTY: qty,
         HARGA: columnMap['HARGA'] !== undefined ? parseCellToNumber(row[columnMap['HARGA']]) : 0,
         SATUAN: columnMap['SATUAN'] !== undefined ? String(row[columnMap['SATUAN']] ?? '').trim() : '',
@@ -238,17 +266,18 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
         // Read file as ArrayBuffer
         const arrayBuffer = await file.arrayBuffer()
 
-        // Parse Excel — raw:true agar angka dibaca sebagai number asli XLSX
-        // defval:null agar cell kosong jadi null (lebih mudah di-filter)
-        const workbook = XLSX.read(arrayBuffer, { type: 'array', raw: true, cellText: true })
+        // Parse Excel dengan raw:true untuk mendapat numeric values yang akurat
+        // Ini penting untuk menghindari format string yang terdistorsi oleh cell formatting di Excel
+        const workbook = XLSX.read(arrayBuffer, { type: 'array', raw: true })
 
         // Get first sheet
         const firstSheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[firstSheetName]
 
-        // Get raw data as 2D array first to find headers
-        // raw:false agar XLSX format angka sebagai string (mempertahankan format asli seperti "1.280")
-        const rawRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: null })
+        // Get raw data as 2D array
+        // raw:true → angka akan di-return sebagai number, bukan string
+        // Ini lebih akurat dibanding raw:false yang bisa terdistorsi oleh custom formatting di Excel
+        const rawRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: undefined })
 
         if (rawRows.length === 0) {
             return {
