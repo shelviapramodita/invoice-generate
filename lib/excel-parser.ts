@@ -136,6 +136,9 @@ function parseIndonesianNumber(str: string): number {
 
     const hasDot = str.includes('.')
     const hasComma = str.includes(',')
+    
+    const isDebug = str.includes('1280') || str.includes('1244')
+    if (isDebug) console.log(`[parseIndonesianNumber] Input: "${str}", hasDot: ${hasDot}, hasComma: ${hasComma}`)
 
     if (hasDot && hasComma) {
         // Keduanya ada: format seperti "1.966.500,50" atau "1,966,500.50"
@@ -223,13 +226,16 @@ function transformRowToExcelRow(row: unknown[], columnMap: Record<string, number
     
     const uraian = columnMap['URAIAN'] !== undefined ? String(row[columnMap['URAIAN']] ?? '').trim() : ''
     
-    // Log detail untuk item tertentu (untuk debug)
+    // Log EVERY row detail for debugging
+    console.log(`[Transform] Row: "${uraian}" - QTY raw: ${qtyRaw} (${typeof qtyRaw}), parsed: ${qty}`)
+    
+    // Extra detail for specific items
     if (uraian.includes('Diamond') || uraian.includes('Fullcream')) {
-        console.log(`[Transform] Row detail for "${uraian}":`)
-        console.log(`  QTY raw value: ${qtyRaw} (type: ${typeof qtyRaw})`)
-        console.log(`  QTY parsed: ${qty}`)
+        console.log(`*** DIAMOND DETECTED ***`)
         console.log(`  Full row data:`, row)
         console.log(`  Column map:`, columnMap)
+        console.log(`  QTY column index: ${columnMap['QTY']}`)
+        console.log(`  QTY raw at index: ${row[columnMap['QTY']]}`)
     }
     
     return {
