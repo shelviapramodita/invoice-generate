@@ -24,6 +24,7 @@ const SKIP_PATTERNS = [
 ]
 
 // Pattern to extract supplier from "NO REK" lines
+// Captures: (1) account number, (2) bank name
 const SUPPLIER_PATTERN = /NO\s*REK\.\s*(\d+)\s*(.+?)(?:\s*-\s*)?$/i
 
 /**
@@ -322,7 +323,10 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             if (noRekValue) {
                 const match = noRekValue.match(SUPPLIER_PATTERN)
                 if (match) {
-                    const supplierName = match[2].trim()
+                    const accountNumber = match[1].trim()
+                    const bankName = match[2].trim()
+                    // Combine account number and bank name for unique supplier identification
+                    const supplierName = `${accountNumber} ${bankName}`
                     if (supplierName) {
                         supplierLines.push({ rowIndex: i, supplier: supplierName })
                         console.log(`[Excel] Row ${i + 1}: Found NO REK supplier: "${supplierName}"`)
