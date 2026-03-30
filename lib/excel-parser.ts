@@ -15,14 +15,16 @@ const REQUIRED_COLUMNS = ['URAIAN', 'QTY', 'HARGA', 'SATUAN', 'TOTAL', 'SUPPLIER
 
 // Patterns to detect non-data rows (categories, totals, notes)
 const SKIP_PATTERNS = [
-    /^(SEMBAKO|BUAH|SAYUR|PROTEIN|DAGING|BUMBU|REMPAH|MINUMAN|SNACK|LAINNYA)/i,
+    /^(SEMBAKO|BUAH|SAYUR|PROTEIN|DAGING|BUMBU|REMPAH|MINUMAN|SNACK|LAINNYA|SAYUR\s*&\s*PROTEIN)/i,
     /^TOTAL\s*$/i,
-    /^NO\s*REK/i,
     /^(NO|NOMOR)$/i,
     /^PENGELUARAN/i,
     /^KATEGORI/i,
     /^\d+$/,  // Just a number (row numbers)
 ]
+
+// Pattern to extract supplier from "NO REK" lines
+const SUPPLIER_PATTERN = /NO\s*REK\.\s*(\d+)\s*(.+?)(?:\s*-\s*)?$/i
 
 /**
  * Check if a row should be skipped (category, total, etc.)
@@ -45,6 +47,12 @@ function shouldSkipRow(row: Record<string, unknown>): boolean {
     // Skip rows that look like headers within data
     const firstVal = String(values[0] || '').trim().toUpperCase()
     if (['NO', 'NOMOR', 'URAIAN', 'NAMA BARANG'].includes(firstVal)) {
+        return true
+    }
+
+    // Skip "NO REK" rows (they contain supplier info, handled separately)
+    const stringValues = values.map(v => String(v || '').trim())
+    if (stringValues.some(v => /NO\s*REK\./i.test(v))) {
         return true
     }
 
@@ -250,7 +258,8 @@ function transformRowToExcelRow(row: unknown[], columnMap: Record<string, number
 
 /**
  * Check if row has valid data (not empty for required fields)
- * URAIAN dan SUPPLIER wajib ada. QTY harus > 0 (items tanpa qty tidak valid).
+ * URAIAN dan QTY wajib ada. QTY harus > 0 (items tanpa qty tidak valid).
+ * SUPPLIER boleh kosong (akan di-assign dari last supplier context).
  * HARGA boleh 0 (bisa jadi gratis/sudah termasuk).
  */
 function isValidDataRow(row: Partial<ExcelRow>): boolean {
@@ -258,9 +267,7 @@ function isValidDataRow(row: Partial<ExcelRow>): boolean {
         row.URAIAN &&
         row.URAIAN.length > 0 &&
         typeof row.QTY === 'number' &&
-        row.QTY > 0 &&
-        row.SUPPLIER &&
-        row.SUPPLIER.length > 0
+        row.QTY > 0
     )
 }
 
@@ -304,6 +311,26 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
 
         const { headerRowIndex, columnMap } = headerResult
 
+        // First pass: Extract all supplier info from "NO REK" lines
+        const supplierMap = new Map<number, string>() // row index → supplier name
+        for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
+            const rawRow = rawRows[i]
+            if (!rawRow) continue
+
+            const stringValues = rawRow.map(v => String(v || '').trim())
+            const noRekValue = stringValues.find(v => /NO\s*REK\./i.test(v))
+            if (noRekValue) {
+                const match = noRekValue.match(SUPPLIER_PATTERN)
+                if (match) {
+                    const supplierName = match[2].trim()
+                    if (supplierName) {
+                        supplierMap.set(i, supplierName)
+                        console.log(`[Excel] Row ${i + 1}: Found supplier in NO REK: "${supplierName}"`)
+                    }
+                }
+            }
+        }
+
         // Process data rows (after header)
         const validRows: ExcelRow[] = []
         const invalidRows: Array<{ row: number; errors: string[] }> = []
@@ -323,6 +350,25 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             rawRow.forEach((val, idx) => {
                 tempObj[`col${idx}`] = val
             })
+
+            // Check for "NO REK" line to extract supplier info
+            const stringValues = rawRow.map(v => String(v || '').trim())
+            const noRekValue = stringValues.find(v => /NO\s*REK\./i.test(v))
+            if (noRekValue) {
+                // Extract supplier from "NO REK. XXXX BANK_NAME"
+                const match = noRekValue.match(SUPPLIER_PATTERN)
+                if (match) {
+                    // match[2] contains the bank name
+                    const supplierName = match[2].trim()
+                    if (supplierName) {
+                        lastValidSupplier = supplierName
+                        console.log(`[Excel] Row ${i + 1}: Updated SUPPLIER from NO REK: "${lastValidSupplier}"`)
+                    }
+                }
+                console.log(`[Excel] Row ${i + 1} SKIPPED (NO REK line):`, rawRow)
+                skippedRows++
+                continue
+            }
 
             // Check if this is a non-data row (category, total, etc.)
             if (shouldSkipRow(tempObj)) {
@@ -355,6 +401,15 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                     SATUAN: transformedRow.SATUAN,
                 })
                 skippedRows++
+                continue
+            }
+
+            // If still no supplier, it means there's no NO REK line before this item
+            // This is a data quality issue - log but allow it through if test-invoice format is needed
+            if (!transformedRow.SUPPLIER || transformedRow.SUPPLIER.length === 0) {
+                console.log(`[Excel] Row ${i + 1}: WARNING - No supplier found for "${transformedRow.URAIAN}". This item requires supplier to be filled in Excel.`)
+                // For now, reject to force user to fix file format
+                invalidRows.push({ row: i + 1, errors: ['Supplier tidak ditemukan. Pastikan ada baris "NO REK" sebelum item ini.'] })
                 continue
             }
 
