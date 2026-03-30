@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import { ExcelRow, ParsedExcelData, InvoiceItemForm } from '@/types'
 import { excelRowSchema, normalizeSupplierName } from './validators'
+import { getSupplierConfig } from '@/data/cv-reference'
 
 interface ParseResult {
     success: boolean
@@ -325,11 +326,15 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                 if (match) {
                     const accountNumber = match[1].trim()
                     const bankName = match[2].trim()
-                    // Combine account number and bank name for unique supplier identification
-                    const supplierName = `${accountNumber} ${bankName}`
+                    const accountAndBank = `${accountNumber} ${bankName}`
+                    
+                    // Try to find CV name from config using account number
+                    const config = getSupplierConfig(accountAndBank)
+                    const supplierName = config?.name || accountAndBank
+                    
                     if (supplierName) {
                         supplierLines.push({ rowIndex: i, supplier: supplierName })
-                        console.log(`[Excel] Row ${i + 1}: Found NO REK supplier: "${supplierName}"`)
+                        console.log(`[Excel] Row ${i + 1}: Found NO REK supplier: "${supplierName}" (account: ${accountNumber})`)
                     }
                 }
             }
