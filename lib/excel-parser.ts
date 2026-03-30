@@ -311,8 +311,8 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
 
         const { headerRowIndex, columnMap } = headerResult
 
-        // First pass: Extract all supplier info from "NO REK" lines
-        const supplierMap = new Map<number, string>() // row index → supplier name
+        // First pass: Find all NO REK supplier lines and their positions
+        const supplierLines: Array<{ rowIndex: number; supplier: string }> = []
         for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
             const rawRow = rawRows[i]
             if (!rawRow) continue
@@ -324,19 +324,28 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                 if (match) {
                     const supplierName = match[2].trim()
                     if (supplierName) {
-                        supplierMap.set(i, supplierName)
-                        console.log(`[Excel] Row ${i + 1}: Found supplier in NO REK: "${supplierName}"`)
+                        supplierLines.push({ rowIndex: i, supplier: supplierName })
+                        console.log(`[Excel] Row ${i + 1}: Found NO REK supplier: "${supplierName}"`)
                     }
                 }
             }
+        }
+
+        // Function to find supplier for a given row (look-ahead to next NO REK)
+        function findSupplierForRow(rowIndex: number): string {
+            // Find the first NO REK line at or after this row
+            for (const { rowIndex: noRekRow, supplier } of supplierLines) {
+                if (noRekRow >= rowIndex) {
+                    return supplier
+                }
+            }
+            return ''
         }
 
         // Process data rows (after header)
         const validRows: ExcelRow[] = []
         const invalidRows: Array<{ row: number; errors: string[] }> = []
         let skippedRows = 0
-
-        let lastValidSupplier = '' // Track last valid supplier for inheritance
 
         for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
             const rawRow = rawRows[i]
@@ -351,20 +360,10 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                 tempObj[`col${idx}`] = val
             })
 
-            // Check for "NO REK" line to extract supplier info
+            // Check for "NO REK" line - skip it
             const stringValues = rawRow.map(v => String(v || '').trim())
             const noRekValue = stringValues.find(v => /NO\s*REK\./i.test(v))
             if (noRekValue) {
-                // Extract supplier from "NO REK. XXXX BANK_NAME"
-                const match = noRekValue.match(SUPPLIER_PATTERN)
-                if (match) {
-                    // match[2] contains the bank name
-                    const supplierName = match[2].trim()
-                    if (supplierName) {
-                        lastValidSupplier = supplierName
-                        console.log(`[Excel] Row ${i + 1}: Updated SUPPLIER from NO REK: "${lastValidSupplier}"`)
-                    }
-                }
                 console.log(`[Excel] Row ${i + 1} SKIPPED (NO REK line):`, rawRow)
                 skippedRows++
                 continue
@@ -381,15 +380,13 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             const transformedRow = transformRowToExcelRow(rawRow, columnMap)
             console.log(`[Excel] Row ${i + 1} transformed:`, transformedRow)
 
-            // If SUPPLIER is empty, inherit from the last valid supplier row
-            // (common in Excel files where supplier is only filled once per group)
+            // If SUPPLIER is empty in the row, look ahead to find the next NO REK supplier
             if (!transformedRow.SUPPLIER || transformedRow.SUPPLIER.length === 0) {
-                if (lastValidSupplier) {
-                    console.log(`[Excel] Row ${i + 1}: SUPPLIER kosong, inherit dari "${lastValidSupplier}"`)
-                    transformedRow.SUPPLIER = lastValidSupplier
+                const lookaheadSupplier = findSupplierForRow(i)
+                if (lookaheadSupplier) {
+                    console.log(`[Excel] Row ${i + 1}: SUPPLIER empty, assigned from look-ahead: "${lookaheadSupplier}"`)
+                    transformedRow.SUPPLIER = lookaheadSupplier
                 }
-            } else {
-                lastValidSupplier = transformedRow.SUPPLIER
             }
 
             // Skip rows that don't have valid data
@@ -404,12 +401,10 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                 continue
             }
 
-            // If still no supplier, it means there's no NO REK line before this item
-            // This is a data quality issue - log but allow it through if test-invoice format is needed
+            // If still no supplier, reject
             if (!transformedRow.SUPPLIER || transformedRow.SUPPLIER.length === 0) {
-                console.log(`[Excel] Row ${i + 1}: WARNING - No supplier found for "${transformedRow.URAIAN}". This item requires supplier to be filled in Excel.`)
-                // For now, reject to force user to fix file format
-                invalidRows.push({ row: i + 1, errors: ['Supplier tidak ditemukan. Pastikan ada baris "NO REK" sebelum item ini.'] })
+                console.log(`[Excel] Row ${i + 1} REJECTED: No supplier found for "${transformedRow.URAIAN}"`)
+                invalidRows.push({ row: i + 1, errors: ['Supplier tidak ditemukan. Pastikan ada baris "NO REK" di file Excel.'] })
                 continue
             }
 
