@@ -28,7 +28,7 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         name: 'UMKM UNDI YUWONO',
         displayName: 'UMKM UNDI YUWONO',
         themeColor: '#71717A', // Neutral gray
-        bankAccount: '330250705',
+        bankAccount: '0330250705',
         bankName: 'BNI',
         address: 'Darmakradenan Ajibarang',
         category: 'BUAH',
@@ -37,7 +37,7 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         name: 'CV SEKAR WIJAYAKUSUMA',
         displayName: 'CV SEKAR WIJAYAKUSUMA',
         themeColor: '#DC2626', // Red
-        bankAccount: '291155789',
+        bankAccount: '0291155789',
         bankName: 'BNI',
         address: 'Dsun.K1, 001/008, RT.012, Kwitang, Gemeter, Kab. Banyumas',
         category: 'SAYUR & PROTEIN',
