@@ -46,17 +46,31 @@ export const supplierMapping: Record<string, SupplierConfig> = {
 
 /**
  * Helper function untuk mendapatkan config supplier berdasarkan nama
+ * Support format: "CV JAYAMEN", "0951810694 BNI", atau nomor rekening saja
  */
 export function getSupplierConfig(supplierName: string): SupplierConfig | null {
     // Normalize supplier name (trim and uppercase)
     const normalized = supplierName.trim().toUpperCase()
 
-    // Try exact match first
+    // Try exact match first (untuk "CV JAYAMEN" format)
     if (supplierMapping[normalized]) {
         return supplierMapping[normalized]
     }
 
-    // Try partial match
+    // Try to match by account number (untuk "0951810694 BNI" format)
+    // Extract account number from supplier name
+    const accountMatch = normalized.match(/^(\d+)/)
+    if (accountMatch) {
+        const accountNumber = accountMatch[1]
+        // Find supplier with matching bank account
+        for (const [key, config] of Object.entries(supplierMapping)) {
+            if (config.bankAccount === accountNumber) {
+                return config
+            }
+        }
+    }
+
+    // Try partial match (untuk backward compatibility)
     for (const key in supplierMapping) {
         if (normalized.includes(key.toUpperCase()) || key.toUpperCase().includes(normalized)) {
             return supplierMapping[key]

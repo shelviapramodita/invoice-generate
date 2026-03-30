@@ -175,6 +175,8 @@ export function InvoicePreview({ data }: InvoicePreviewProps) {
                                 const config = getSupplierConfig(s.supplier)
                                 const themeColor = config?.themeColor || '#6B7280'
                                 const itemCount = data[s.supplier]?.length || 0
+                                // Display CV name from config or fallback to account number + bank
+                                const displayName = config?.displayName || s.supplier
                                 return (
                                     <div
                                         key={s.supplier}
@@ -187,7 +189,7 @@ export function InvoicePreview({ data }: InvoicePreviewProps) {
                                                 style={{ backgroundColor: themeColor }}
                                             />
                                             <div>
-                                                <div className="font-semibold text-sm">{s.supplier}</div>
+                                                <div className="font-semibold text-sm">{displayName}</div>
                                                 <div className="text-xs text-muted-foreground">
                                                     {itemCount} item · {config?.category || 'Lainnya'}
                                                 </div>
@@ -218,20 +220,23 @@ export function InvoicePreview({ data }: InvoicePreviewProps) {
                             {suppliers.map((supplier) => {
                                 const config = getSupplierConfig(supplier)
                                 const themeColor = config?.themeColor || '#6B7280'
+                                // Display name: prefer config displayName, fallback to supplier name with CV/UMKM stripped
+                                const displayName = config?.displayName || supplier.replace('CV ', '').replace('UMKM ', '')
                                 return (
                                     <TabsTrigger
                                         key={supplier}
                                         value={supplier}
-                                        className="text-xs md:text-sm data-[state=active]:shadow-sm"
+                                        className="text-xs md:text-sm data-[state=active]:shadow-sm truncate"
+                                        title={displayName}
                                         style={{
                                             '--tab-active-color': themeColor,
                                         } as React.CSSProperties}
                                     >
                                         <span
-                                            className="w-2 h-2 rounded-full mr-2 hidden md:inline-block"
+                                            className="w-2 h-2 rounded-full mr-2 hidden md:inline-block flex-shrink-0"
                                             style={{ backgroundColor: themeColor }}
                                         />
-                                        {supplier.replace('CV ', '').replace('UMKM ', '')}
+                                        <span className="truncate">{displayName}</span>
                                     </TabsTrigger>
                                 )
                             })}
