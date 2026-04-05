@@ -208,6 +208,7 @@ export function InvoiceDetailView({
             setEditedBatchName(invoice.batch_name || '')
             setEditedInvoiceDate(invoice.invoice_date.split('T')[0])
             setDeletedItemIds([])
+            setShowDownloadOptions(false)
             setIsEditing(true)
         }
     }
@@ -1024,6 +1025,53 @@ export function InvoiceDetailView({
                                     )
                                 )}
 
+                                {/* Download Options (inline after save & download) */}
+                                {showDownloadOptions && !isEditing && (
+                                    <div className="border-t pt-6 mt-6">
+                                        <div className="rounded-xl border-2 border-green-200 bg-green-50/50 p-5 space-y-4 animate-in fade-in-50 slide-in-from-top-2 duration-300">
+                                            <div className="flex items-center gap-2">
+                                                <CheckCircle className="h-5 w-5 text-green-600" />
+                                                <span className="font-semibold text-green-800">Perubahan disimpan! Pilih opsi download:</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <Button
+                                                    variant="outline"
+                                                    className="h-auto py-4 flex flex-col gap-2 items-center bg-white hover:bg-muted/50"
+                                                    onClick={handleDownloadSeparate}
+                                                    disabled={downloading}
+                                                >
+                                                    <Download className="h-5 w-5" />
+                                                    <span className="text-sm font-medium">File Ini Saja</span>
+                                                </Button>
+                                                <Button
+                                                    variant="default"
+                                                    className="h-auto py-4 flex flex-col gap-2 items-center"
+                                                    onClick={handleDownloadMerged}
+                                                    disabled={downloading}
+                                                >
+                                                    <Files className="h-5 w-5" />
+                                                    <span className="text-sm font-medium">Gabung Jadi 1 PDF</span>
+                                                </Button>
+                                                <Button
+                                                    variant="default"
+                                                    className="h-auto py-4 flex flex-col gap-2 items-center bg-zinc-800 hover:bg-zinc-700"
+                                                    onClick={handleDownloadZip}
+                                                    disabled={downloading}
+                                                >
+                                                    <FileArchive className="h-5 w-5" />
+                                                    <span className="text-sm font-medium">Download ZIP ({suppliers.length} file)</span>
+                                                </Button>
+                                            </div>
+                                            {downloading && (
+                                                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                                                    <span>Mengunduh...</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Preview & Download Button */}
                                 {!isEditing && (
                                     <div className="border-t pt-6 mt-6">
@@ -1138,47 +1186,6 @@ export function InvoiceDetailView({
                                 Tambah
                             </Button>
                         </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
-            {/* Download Options Dialog */}
-            <Dialog open={showDownloadOptions} onOpenChange={setShowDownloadOptions}>
-                <DialogContent className="sm:max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Download Invoice</DialogTitle>
-                        <DialogDescription>
-                            Pilih opsi download:
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid grid-cols-3 gap-3 pt-2">
-                        <Button
-                            variant="outline"
-                            className="h-auto py-4 flex flex-col gap-2 items-center"
-                            onClick={handleDownloadSeparate}
-                            disabled={downloading}
-                        >
-                            <Download className="h-5 w-5" />
-                            <span className="text-sm font-medium">File Ini Saja</span>
-                        </Button>
-                        <Button
-                            variant="default"
-                            className="h-auto py-4 flex flex-col gap-2 items-center"
-                            onClick={handleDownloadMerged}
-                            disabled={downloading}
-                        >
-                            <Files className="h-5 w-5" />
-                            <span className="text-sm font-medium">Gabung Jadi 1 PDF</span>
-                        </Button>
-                        <Button
-                            variant="default"
-                            className="h-auto py-4 flex flex-col gap-2 items-center bg-zinc-800 hover:bg-zinc-700"
-                            onClick={handleDownloadZip}
-                            disabled={downloading}
-                        >
-                            <FileArchive className="h-5 w-5" />
-                            <span className="text-sm font-medium">Download ZIP ({suppliers.length} file)</span>
-                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
