@@ -176,14 +176,14 @@ export default function HistoryPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {loading && (
+                            {loading && history.length === 0 && (
                                 <div className="text-center py-12">
                                     <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent mb-4" />
                                     <p className="text-muted-foreground">Memuat data...</p>
                                 </div>
                             )}
 
-                            {error && (
+                            {error && history.length === 0 && (
                                 <div className="text-center py-12">
                                     <p className="text-destructive mb-4">{error}</p>
                                     <Button onClick={fetchHistory} variant="outline">
@@ -192,7 +192,7 @@ export default function HistoryPage() {
                                 </div>
                             )}
 
-                            {!loading && !error && (
+                            {(history.length > 0 || (!loading && !error)) && (
                                 <HistoryTable data={filteredHistory} onRefresh={fetchHistory} />
                             )}
                         </CardContent>
