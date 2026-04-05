@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
-import { id } from 'date-fns/locale'
-import { Trash2, Eye, X, Edit, Save, CheckCircle } from 'lucide-react'
+import { id as idLocale } from 'date-fns/locale'
+import { Trash2, Eye, X, Edit, Save, CheckCircle, Plus, CalendarIcon, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Dialog,
@@ -13,6 +13,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { FullScreenPDFPreview } from '@/components/invoice/fullscreen-pdf-preview'
 import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-dialog'
 import {
@@ -66,6 +67,13 @@ function formatCurrency(amount: number): string {
     }).format(amount)
 }
 
+// Generate a temporary ID for new items (will be replaced by DB id)
+let tempIdCounter = 0
+function generateTempId() {
+    tempIdCounter++
+    return `__new_${tempIdCounter}_${Date.now()}`
+}
+
 export function InvoiceDetailView({
     invoiceId,
     open,
@@ -82,9 +90,20 @@ export function InvoiceDetailView({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
-    const [editedItems, setEditedItems] = useState<InvoiceItem[]>([])
     const [saving, setSaving] = useState(false)
     const [markingComplete, setMarkingComplete] = useState(false)
+
+    // Edit state
+    const [editedItems, setEditedItems] = useState<InvoiceItem[]>([])
+    const [editedBatchName, setEditedBatchName] = useState('')
+    const [editedInvoiceDate, setEditedInvoiceDate] = useState('')
+    const [deletedItemIds, setDeletedItemIds] = useState<string[]>([])
+    const [activeSupplierTab, setActiveSupplierTab] = useState<string>('')
+
+    // Dialog for adding new supplier
+    const [showAddSupplier, setShowAddSupplier] = useState(false)
+    const [newSupplierName, setNewSupplierName] = useState('')
+    const [newSupplierInvoiceNumber, setNewSupplierInvoiceNumber] = useState('')
 
     const fetchDetail = useCallback(async () => {
         if (!invoiceId) return
@@ -114,6 +133,15 @@ export function InvoiceDetailView({
         }
     }, [open, invoiceId, fetchDetail])
 
+    // Reset edit state when closing
+    useEffect(() => {
+        if (!open) {
+            setIsEditing(false)
+            setEditedItems([])
+            setDeletedItemIds([])
+        }
+    }, [open])
+
     const handleDownloadPDF = async (supplier: string, pdfPath: string) => {
         if (!pdfPath) {
             toast.error('File PDF tidak ditemukan')
@@ -121,15 +149,8 @@ export function InvoiceDetailView({
         }
 
         try {
-            // Show simple loading feedback (mouse cursor wait)
             document.body.style.cursor = 'wait'
-
-            console.log('Downloading PDF:', { supplier, pdfPath })
-
-            // Download from Supabase Storage
             const blob = await downloadFile('generated-pdfs', pdfPath)
-
-            // Create download link
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = url
@@ -138,8 +159,6 @@ export function InvoiceDetailView({
             link.click()
             document.body.removeChild(link)
             URL.revokeObjectURL(url)
-
-            console.log('Download success')
         } catch (error) {
             console.error('Error downloading PDF:', error)
             toast.error('Gagal mendownload PDF. Pastikan file ada di storage.')
@@ -149,14 +168,12 @@ export function InvoiceDetailView({
     }
 
     const handleDelete = () => {
-        console.log('Delete button clicked in detail view')
         setShowDeleteConfirm(true)
     }
 
     const handleConfirmDelete = async () => {
         if (!invoiceId) return
 
-        console.log('Delete confirmed, starting delete process for:', invoiceId)
         setDeleting(true)
         setShowDeleteConfirm(false)
 
@@ -171,12 +188,9 @@ export function InvoiceDetailView({
                 throw new Error(responseData.message || 'Failed to delete')
             }
 
-            console.log('Delete successful')
             toast.success('Invoice berhasil dihapus!')
-
-            // Close detail view and trigger refresh
             onOpenChange(false)
-            onDelete?.() // This will trigger parent refresh
+            onDelete?.()
         } catch (error) {
             console.error('Error deleting:', error)
             toast.error(`Gagal menghapus invoice: ${(error as Error).message}`)
@@ -185,11 +199,14 @@ export function InvoiceDetailView({
         }
     }
 
-
+    // ========== EDIT HANDLERS ==========
 
     const handleEdit = () => {
         if (invoice) {
-            setEditedItems([...invoice.items])
+            setEditedItems(invoice.items.map(item => ({ ...item })))
+            setEditedBatchName(invoice.batch_name || '')
+            setEditedInvoiceDate(invoice.invoice_date.split('T')[0])
+            setDeletedItemIds([])
             setIsEditing(true)
         }
     }
@@ -197,40 +214,250 @@ export function InvoiceDetailView({
     const handleCancelEdit = () => {
         setIsEditing(false)
         setEditedItems([])
+        setDeletedItemIds([])
     }
 
-    const handleSaveEdit = async () => {
+    const handleItemChange = (itemId: string, field: keyof InvoiceItem, value: any) => {
+        setEditedItems(prev => prev.map(item => {
+            if (item.id !== itemId) return item
+
+            const updated = { ...item, [field]: value }
+
+            // Recalculate total if qty or price changed
+            if (field === 'quantity' || field === 'price') {
+                const qty = field === 'quantity' ? parseFloat(value) || 0 : updated.quantity
+                const price = field === 'price' ? parseFloat(value) || 0 : updated.price
+                updated.total = qty * price
+            }
+
+            return updated
+        }))
+    }
+
+    // Change supplier name for all items of that supplier
+    const handleSupplierNameChange = (oldName: string, newName: string) => {
+        setEditedItems(prev => prev.map(item =>
+            item.supplier === oldName ? { ...item, supplier: newName } : item
+        ))
+    }
+
+    // Change invoice number for all items of that supplier
+    const handleInvoiceNumberChange = (supplier: string, newNumber: string) => {
+        setEditedItems(prev => prev.map(item =>
+            item.supplier === supplier ? { ...item, invoice_number: newNumber } : item
+        ))
+    }
+
+    // Delete single item
+    const handleDeleteItem = (itemId: string) => {
+        // Track DB items for server-side deletion
+        if (!itemId.startsWith('__new_')) {
+            setDeletedItemIds(prev => [...prev, itemId])
+        }
+        setEditedItems(prev => prev.filter(item => item.id !== itemId))
+    }
+
+    // Delete all items for a supplier
+    const handleDeleteSupplier = (supplier: string) => {
+        const supplierItems = editedItems.filter(item => item.supplier === supplier)
+        const dbItemIds = supplierItems
+            .filter(item => !item.id.startsWith('__new_'))
+            .map(item => item.id)
+
+        setDeletedItemIds(prev => [...prev, ...dbItemIds])
+        setEditedItems(prev => prev.filter(item => item.supplier !== supplier))
+    }
+
+    // Add item to a supplier
+    const handleAddItem = (supplier: string) => {
+        const supplierItems = editedItems.filter(i => i.supplier === supplier)
+        const invoiceNumber = supplierItems[0]?.invoice_number || '#KWITANSI0001'
+
+        const newItem: InvoiceItem = {
+            id: generateTempId(),
+            supplier,
+            invoice_number: invoiceNumber,
+            item_name: '',
+            quantity: 0,
+            unit: 'pcs',
+            price: 0,
+            total: 0,
+            pdf_file_path: '',
+        }
+
+        setEditedItems(prev => [...prev, newItem])
+    }
+
+    // Add new supplier
+    const handleAddSupplier = () => {
+        if (!newSupplierName.trim()) {
+            toast.error('Nama supplier tidak boleh kosong')
+            return
+        }
+
+        // Check duplicate
+        const existing = editedItems.find(
+            i => i.supplier.toLowerCase() === newSupplierName.trim().toLowerCase()
+        )
+        if (existing) {
+            toast.error('Supplier sudah ada')
+            return
+        }
+
+        const newItem: InvoiceItem = {
+            id: generateTempId(),
+            supplier: newSupplierName.trim(),
+            invoice_number: newSupplierInvoiceNumber.trim() || '#KWITANSI0001',
+            item_name: '',
+            quantity: 0,
+            unit: 'pcs',
+            price: 0,
+            total: 0,
+            pdf_file_path: '',
+        }
+
+        setEditedItems(prev => [...prev, newItem])
+        setActiveSupplierTab(newSupplierName.trim())
+        setShowAddSupplier(false)
+        setNewSupplierName('')
+        setNewSupplierInvoiceNumber('')
+    }
+
+    const handleSaveEdit = async (andDownload = false) => {
         if (!invoiceId) return
+
+        // Validate: at least 1 item with item_name
+        const validItems = editedItems.filter(i => i.item_name.trim())
+        if (validItems.length === 0) {
+            toast.error('Minimal harus ada 1 item dengan nama barang')
+            return
+        }
 
         setSaving(true)
         try {
-            console.log('Saving changes:', editedItems)
+            // Separate existing items (update) vs new items (insert)
+            const existingItems = validItems.filter(i => !i.id.startsWith('__new_'))
+            const newItems = validItems.filter(i => i.id.startsWith('__new_'))
+
+            const payload: any = {}
+
+            // Metadata
+            if (editedBatchName !== (invoice?.batch_name || '')) {
+                payload.batch_name = editedBatchName || null
+            }
+            if (editedInvoiceDate !== invoice?.invoice_date.split('T')[0]) {
+                payload.invoice_date = editedInvoiceDate
+            }
+
+            // Existing items to update
+            if (existingItems.length > 0) {
+                payload.items = existingItems
+            }
+
+            // New items to insert
+            if (newItems.length > 0) {
+                payload.new_items = newItems.map(item => ({
+                    supplier: item.supplier,
+                    invoice_number: item.invoice_number,
+                    item_name: item.item_name,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    price: item.price,
+                    total: item.total,
+                }))
+            }
+
+            // Items to delete
+            if (deletedItemIds.length > 0) {
+                payload.delete_item_ids = deletedItemIds
+            }
+
+            console.log('[Edit] Saving payload:', payload)
 
             const response = await fetch(`/api/invoices/${invoiceId}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    items: editedItems,
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
             })
 
             const result = await response.json()
-            console.log('Save response:', result)
 
             if (!response.ok) {
                 throw new Error(result.message || 'Failed to save changes')
             }
 
-            toast.success('Perubahan berhasil disimpan dan PDF sudah di-regenerate!')
             setIsEditing(false)
+            setDeletedItemIds([])
             await fetchDetail()
+            onDelete?.() // Refresh parent list
+
+            if (andDownload) {
+                toast.success('Perubahan disimpan! Mengunduh PDF...')
+                // Small delay to let fetchDetail update the state with new pdf paths
+                setTimeout(() => {
+                    downloadAllAfterSave()
+                }, 500)
+            } else {
+                toast.success('Perubahan berhasil disimpan dan PDF sudah di-regenerate!')
+            }
         } catch (error) {
             console.error('Error saving:', error)
             toast.error(`Gagal menyimpan perubahan: ${(error as Error).message}`)
         } finally {
             setSaving(false)
+        }
+    }
+
+    const downloadAllAfterSave = async () => {
+        setDownloading(true)
+        try {
+            // Re-fetch the latest detail to get updated PDF paths
+            const response = await fetch(`/api/invoices/${invoiceId}`)
+            if (!response.ok) throw new Error('Failed to fetch updated invoice')
+            const result = await response.json()
+            const latestInvoice = result.data as InvoiceDetail
+
+            // Group items by supplier to get PDF paths
+            const supplierPdfMap: Record<string, { supplier: string; invoiceNumber: string; pdfPath: string }> = {}
+            for (const item of latestInvoice.items) {
+                if (!supplierPdfMap[item.supplier] && item.pdf_file_path && item.pdf_file_path !== 'client-side-download' && item.pdf_file_path !== 'pending-regeneration') {
+                    supplierPdfMap[item.supplier] = {
+                        supplier: item.supplier,
+                        invoiceNumber: item.invoice_number,
+                        pdfPath: item.pdf_file_path,
+                    }
+                }
+            }
+
+            const entries = Object.values(supplierPdfMap)
+            if (entries.length === 0) {
+                toast.warning('Tidak ada PDF yang tersedia untuk didownload')
+                return
+            }
+
+            // Download all blobs
+            const pdfs: { supplier: string; invoiceNumber: string; blob: Blob }[] = []
+            for (const entry of entries) {
+                try {
+                    const blob = await downloadFile('generated-pdfs', entry.pdfPath)
+                    pdfs.push({ supplier: entry.supplier, invoiceNumber: entry.invoiceNumber, blob })
+                } catch (err) {
+                    console.error(`Failed to download PDF for ${entry.supplier}:`, err)
+                }
+            }
+
+            if (pdfs.length > 0) {
+                const { downloadAllPDFs } = await import('@/lib/pdf/pdf-generator')
+                await downloadAllPDFs(pdfs, latestInvoice.batch_name || undefined)
+                toast.success(`${pdfs.length} PDF berhasil diunduh!`)
+            } else {
+                toast.warning('Gagal mengunduh PDF')
+            }
+        } catch (error) {
+            console.error('Error downloading after save:', error)
+            toast.error(`Gagal mengunduh PDF: ${(error as Error).message}`)
+        } finally {
+            setDownloading(false)
         }
     }
 
@@ -241,12 +468,8 @@ export function InvoiceDetailView({
         try {
             const response = await fetch(`/api/invoices/${invoiceId}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    status: 'completed',
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'completed' }),
             })
 
             const result = await response.json()
@@ -257,31 +480,13 @@ export function InvoiceDetailView({
 
             toast.success('Invoice berhasil ditandai selesai!')
             await fetchDetail()
-            onDelete?.() // Refresh parent list
+            onDelete?.()
         } catch (error) {
             console.error('Error marking complete:', error)
             toast.error(`Gagal mengubah status: ${(error as Error).message}`)
         } finally {
             setMarkingComplete(false)
         }
-    }
-
-    const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
-        const updated = [...editedItems]
-        updated[index] = {
-            ...updated[index],
-            [field]: value,
-        }
-
-        // Recalculate total if qty or price changed
-        if (field === 'quantity' || field === 'price') {
-            const qty = field === 'quantity' ? parseFloat(value) || 0 : updated[index].quantity
-            const price = field === 'price' ? parseFloat(value) || 0 : updated[index].price
-            updated[index].total = qty * price
-        }
-
-        console.log('Item changed:', { index, field, value, item: updated[index] })
-        setEditedItems(updated)
     }
 
     if (!invoice && !loading) {
@@ -317,16 +522,13 @@ export function InvoiceDetailView({
             const items = itemsBySupplier[supplier]
             const pdfPath = items[0]?.pdf_file_path
 
-            // Skip client-side downloaded PDFs (not stored in Supabase)
             if (!pdfPath || pdfPath === 'client-side-download') {
-                console.warn(`[Preview] PDF not stored for ${supplier} (path: ${pdfPath})`)
                 completed++
                 onProgress?.(completed, total)
                 return null
             }
 
             try {
-                console.log(`[Preview] Downloading PDF for ${supplier} from ${pdfPath}`)
                 const blob = await downloadFile('generated-pdfs', pdfPath)
                 completed++
                 onProgress?.(completed, total)
@@ -336,7 +538,7 @@ export function InvoiceDetailView({
                     blob
                 }
             } catch (error) {
-                console.error(`Error downloading PDF for ${supplier} (path: ${pdfPath}):`, error)
+                console.error(`Error downloading PDF for ${supplier}:`, error)
                 completed++
                 onProgress?.(completed, total)
                 return null
@@ -347,7 +549,6 @@ export function InvoiceDetailView({
         return pdfs.filter((pdf): pdf is { supplier: string; invoiceNumber: string; blob: Blob } => pdf !== null)
     }
 
-    // Download all PDFs separately
     const handleDownloadAll = async () => {
         setDownloading(true)
         try {
@@ -367,40 +568,25 @@ export function InvoiceDetailView({
         }
     }
 
-    // Open Preview Modal
     const handlePreview = async () => {
-        console.log('handlePreview called!')
-
-        // Check if any PDFs are stored in Supabase
         const hasStoredPDFs = suppliers.some(s => {
             const path = itemsBySupplier[s]?.[0]?.pdf_file_path
-            console.log(`Checking ${s}: path = ${path}`)
             return path && path !== 'client-side-download'
         })
 
-        console.log('hasStoredPDFs:', hasStoredPDFs)
-
         if (!hasStoredPDFs) {
-            console.log('Showing alert: No stored PDFs')
             toast.warning('PDFs tidak tersedia untuk preview. Invoice ini di-generate dengan metode lama.')
-            console.log('Alert shown, returning early')
-            return // Stop execution here
+            return
         }
 
-        console.log('Continuing to fetch PDFs...')
         setDownloading(true)
         setLoadingStatus('Preparing...')
-        setShowPreview(true) // Show preview immediately
+        setShowPreview(true)
 
         try {
-            console.log('Fetching PDFs...')
             const pdfs = await fetchAllPDFs((c, t) => {
-                const status = `Downloading ${c}/${t}...`
-                console.log(status)
-                setLoadingStatus(status)
+                setLoadingStatus(`Downloading ${c}/${t}...`)
             })
-
-            console.log('PDFs fetched:', pdfs.length)
 
             if (pdfs.length > 0) {
                 setLoadingStatus('Opening preview...')
@@ -427,16 +613,43 @@ export function InvoiceDetailView({
                     showCloseButton={false}
                 >
                     <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-                        {/* ... existing header code ... */}
                         <div className="flex items-center justify-between">
-                            <div>
-                                <DialogTitle>Invoice Detail</DialogTitle>
-                                <DialogDescription>
-                                    {invoice?.batch_name || 'Untitled'} -{' '}
-                                    {invoice && format(new Date(invoice.invoice_date), 'dd MMMM yyyy', { locale: id })}
-                                </DialogDescription>
+                            <div className="flex-1 mr-4">
+                                {isEditing ? (
+                                    <div className="space-y-2">
+                                        <div>
+                                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Batch Name</label>
+                                            <Input
+                                                value={editedBatchName}
+                                                onChange={(e) => setEditedBatchName(e.target.value)}
+                                                placeholder="Nama batch..."
+                                                className="mt-1 h-9 text-base font-semibold"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tanggal Invoice</label>
+                                            <div className="relative mt-1">
+                                                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    type="date"
+                                                    value={editedInvoiceDate}
+                                                    onChange={(e) => setEditedInvoiceDate(e.target.value)}
+                                                    className="h-9 pl-10"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <DialogTitle>Invoice Detail</DialogTitle>
+                                        <DialogDescription>
+                                            {invoice?.batch_name || 'Untitled'} -{' '}
+                                            {invoice && format(new Date(invoice.invoice_date), 'dd MMMM yyyy', { locale: idLocale })}
+                                        </DialogDescription>
+                                    </>
+                                )}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                                 {isEditing ? (
                                     <>
                                         <Button
@@ -451,11 +664,21 @@ export function InvoiceDetailView({
                                         <Button
                                             variant="default"
                                             size="sm"
-                                            onClick={handleSaveEdit}
+                                            onClick={() => handleSaveEdit(false)}
                                             disabled={saving}
                                         >
                                             <Save className="h-4 w-4 mr-2" />
-                                            {saving ? 'Menyimpan & Regenerating PDF...' : 'Simpan'}
+                                            {saving ? 'Menyimpan...' : 'Simpan'}
+                                        </Button>
+                                        <Button
+                                            variant="default"
+                                            size="sm"
+                                            onClick={() => handleSaveEdit(true)}
+                                            disabled={saving}
+                                            className="bg-green-600 hover:bg-green-700"
+                                        >
+                                            <Download className="h-4 w-4 mr-2" />
+                                            {saving ? 'Menyimpan...' : 'Simpan & Download'}
                                         </Button>
                                     </>
                                 ) : (
@@ -508,7 +731,7 @@ export function InvoiceDetailView({
                                             </CardTitle>
                                         </CardHeader>
                                         <CardContent>
-                                            <div className="text-3xl font-bold text-primary">{invoice.total_suppliers}</div>
+                                            <div className="text-3xl font-bold text-primary">{suppliers.length}</div>
                                         </CardContent>
                                     </Card>
 
@@ -538,67 +761,121 @@ export function InvoiceDetailView({
                                 </div>
 
                                 {/* Items per Supplier */}
-                                <Tabs defaultValue={suppliers[0]} className="w-full">
-                                    <TabsList className="w-full h-auto p-1 bg-muted/50 rounded-xl mb-6 flex flex-wrap gap-1">
-                                        {suppliers.map((supplier) => (
-                                            <TabsTrigger
-                                                key={supplier}
-                                                value={supplier}
-                                                className="flex-1 min-w-[100px] rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm py-2 text-sm transition-all"
-                                            >
-                                                {supplier}
-                                            </TabsTrigger>
-                                        ))}
-                                    </TabsList>
+                                {suppliers.length > 0 ? (
+                                    <Tabs
+                                        value={activeSupplierTab || suppliers[0]}
+                                        onValueChange={setActiveSupplierTab}
+                                        className="w-full"
+                                    >
+                                        <div className="flex items-center gap-2 mb-6">
+                                            <TabsList className="flex-1 h-auto p-1 bg-muted/50 rounded-xl flex flex-wrap gap-1">
+                                                {suppliers.map((supplier) => (
+                                                    <TabsTrigger
+                                                        key={supplier}
+                                                        value={supplier}
+                                                        className="flex-1 min-w-[100px] rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm py-2 text-sm transition-all"
+                                                    >
+                                                        {supplier}
+                                                    </TabsTrigger>
+                                                ))}
+                                            </TabsList>
+                                            {isEditing && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setShowAddSupplier(true)}
+                                                    className="shrink-0 gap-1.5"
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                    Supplier
+                                                </Button>
+                                            )}
+                                        </div>
 
-                                    {suppliers.map((supplier) => {
-                                        const items = itemsBySupplier[supplier] || []
-                                        const subtotal = items.reduce((sum, item) => sum + item.total, 0)
+                                        {suppliers.map((supplier) => {
+                                            const items = itemsBySupplier[supplier] || []
+                                            const subtotal = items.reduce((sum, item) => sum + item.total, 0)
+                                            const invoiceNumber = items[0]?.invoice_number || ''
 
-                                        return (
-                                            <TabsContent key={supplier} value={supplier} className="space-y-4 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
-                                                <div className="flex items-center justify-between flex-wrap gap-3 bg-muted/30 p-4 rounded-xl border">
-                                                    <div>
-                                                        <h3 className="font-bold text-lg text-foreground">{supplier}</h3>
-                                                        <p className="text-sm text-muted-foreground mt-1">
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mr-2">
-                                                                {items.length} items
-                                                            </span>
-                                                            Subtotal: <span className="font-semibold text-foreground">{formatCurrency(subtotal)}</span>
-                                                        </p>
+                                            return (
+                                                <TabsContent key={supplier} value={supplier} className="space-y-4 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
+                                                    <div className="flex items-center justify-between flex-wrap gap-3 bg-muted/30 p-4 rounded-xl border">
+                                                        <div className="flex-1 min-w-0">
+                                                            {isEditing ? (
+                                                                <div className="space-y-2">
+                                                                    <div>
+                                                                        <label className="text-xs text-muted-foreground">Nama Supplier</label>
+                                                                        <Input
+                                                                            value={supplier}
+                                                                            onChange={(e) => handleSupplierNameChange(supplier, e.target.value)}
+                                                                            className="mt-0.5 h-8 font-bold text-base"
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="text-xs text-muted-foreground">Nomor Invoice</label>
+                                                                        <Input
+                                                                            value={invoiceNumber}
+                                                                            onChange={(e) => handleInvoiceNumberChange(supplier, e.target.value)}
+                                                                            placeholder="#KWITANSI0001"
+                                                                            className="mt-0.5 h-8 font-mono text-sm"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <h3 className="font-bold text-lg text-foreground">{supplier}</h3>
+                                                                    <p className="text-sm text-muted-foreground mt-1">
+                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mr-2">
+                                                                            {items.length} items
+                                                                        </span>
+                                                                        {invoiceNumber && (
+                                                                            <span className="font-mono text-xs mr-2">{invoiceNumber}</span>
+                                                                        )}
+                                                                        Subtotal: <span className="font-semibold text-foreground">{formatCurrency(subtotal)}</span>
+                                                                    </p>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        {isEditing && (
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="sm"
+                                                                onClick={() => handleDeleteSupplier(supplier)}
+                                                                className="shrink-0 gap-1.5"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                Hapus Supplier
+                                                            </Button>
+                                                        )}
                                                     </div>
 
-                                                </div>
-
-                                                <div className="border rounded-xl overflow-hidden shadow-sm bg-card">
-                                                    <div className="overflow-x-auto">
-                                                        <Table>
-                                                            <TableHeader className="bg-muted/40">
-                                                                <TableRow className="hover:bg-transparent">
-                                                                    <TableHead className="w-12 text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-4">No</TableHead>
-                                                                    <TableHead className="min-w-[180px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Item Description</TableHead>
-                                                                    <TableHead className="text-right w-20 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Qty</TableHead>
-                                                                    <TableHead className="w-20 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Unit</TableHead>
-                                                                    <TableHead className="text-right min-w-[120px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Price</TableHead>
-                                                                    <TableHead className="text-right min-w-[120px] text-xs font-semibold uppercase tracking-wider text-muted-foreground pr-4">Total</TableHead>
-                                                                </TableRow>
-                                                            </TableHeader>
-                                                            <TableBody>
-                                                                {items.map((item, index) => {
-                                                                    const globalIndex = isEditing
-                                                                        ? editedItems.findIndex(i => i.id === item.id)
-                                                                        : -1
-
-                                                                    return (
+                                                    <div className="border rounded-xl overflow-hidden shadow-sm bg-card">
+                                                        <div className="overflow-x-auto">
+                                                            <Table>
+                                                                <TableHeader className="bg-muted/40">
+                                                                    <TableRow className="hover:bg-transparent">
+                                                                        <TableHead className="w-12 text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-4">No</TableHead>
+                                                                        <TableHead className="min-w-[180px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Item Description</TableHead>
+                                                                        <TableHead className="text-right w-20 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Qty</TableHead>
+                                                                        <TableHead className="w-20 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Unit</TableHead>
+                                                                        <TableHead className="text-right min-w-[120px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Price</TableHead>
+                                                                        <TableHead className="text-right min-w-[120px] text-xs font-semibold uppercase tracking-wider text-muted-foreground pr-4">Total</TableHead>
+                                                                        {isEditing && (
+                                                                            <TableHead className="w-12 text-xs font-semibold uppercase tracking-wider text-muted-foreground"></TableHead>
+                                                                        )}
+                                                                    </TableRow>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {items.map((item, index) => (
                                                                         <TableRow key={item.id} className="hover:bg-muted/30 transition-colors">
                                                                             <TableCell className="text-xs text-muted-foreground pl-4">{index + 1}</TableCell>
                                                                             <TableCell className="font-medium text-sm text-foreground">
                                                                                 {isEditing ? (
-                                                                                    <input
-                                                                                        type="text"
+                                                                                    <Input
                                                                                         value={item.item_name}
-                                                                                        onChange={(e) => handleItemChange(globalIndex, 'item_name', e.target.value)}
-                                                                                        className="w-full px-2 py-1 border rounded text-sm"
+                                                                                        onChange={(e) => handleItemChange(item.id, 'item_name', e.target.value)}
+                                                                                        className="h-8 text-sm"
+                                                                                        placeholder="Nama barang..."
                                                                                     />
                                                                                 ) : (
                                                                                     item.item_name
@@ -606,11 +883,11 @@ export function InvoiceDetailView({
                                                                             </TableCell>
                                                                             <TableCell className="text-right text-sm">
                                                                                 {isEditing ? (
-                                                                                    <input
+                                                                                    <Input
                                                                                         type="number"
                                                                                         value={item.quantity}
-                                                                                        onChange={(e) => handleItemChange(globalIndex, 'quantity', e.target.value)}
-                                                                                        className="w-full px-2 py-1 border rounded text-sm text-right"
+                                                                                        onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
+                                                                                        className="h-8 text-sm text-right w-20"
                                                                                         step="0.01"
                                                                                     />
                                                                                 ) : (
@@ -619,11 +896,10 @@ export function InvoiceDetailView({
                                                                             </TableCell>
                                                                             <TableCell className="text-xs text-muted-foreground">
                                                                                 {isEditing ? (
-                                                                                    <input
-                                                                                        type="text"
+                                                                                    <Input
                                                                                         value={item.unit}
-                                                                                        onChange={(e) => handleItemChange(globalIndex, 'unit', e.target.value)}
-                                                                                        className="w-full px-2 py-1 border rounded text-xs"
+                                                                                        onChange={(e) => handleItemChange(item.id, 'unit', e.target.value)}
+                                                                                        className="h-8 text-xs w-20"
                                                                                     />
                                                                                 ) : (
                                                                                     item.unit
@@ -631,11 +907,11 @@ export function InvoiceDetailView({
                                                                             </TableCell>
                                                                             <TableCell className="text-right text-sm whitespace-nowrap font-mono text-muted-foreground">
                                                                                 {isEditing ? (
-                                                                                    <input
+                                                                                    <Input
                                                                                         type="number"
                                                                                         value={item.price}
-                                                                                        onChange={(e) => handleItemChange(globalIndex, 'price', e.target.value)}
-                                                                                        className="w-full px-2 py-1 border rounded text-sm text-right font-mono"
+                                                                                        onChange={(e) => handleItemChange(item.id, 'price', e.target.value)}
+                                                                                        className="h-8 text-sm text-right font-mono w-28"
                                                                                         step="1000"
                                                                                     />
                                                                                 ) : (
@@ -645,88 +921,185 @@ export function InvoiceDetailView({
                                                                             <TableCell className="text-right font-medium text-sm whitespace-nowrap font-mono pr-4">
                                                                                 {formatCurrency(item.total)}
                                                                             </TableCell>
+                                                                            {isEditing && (
+                                                                                <TableCell className="pr-4">
+                                                                                    <Button
+                                                                                        variant="ghost"
+                                                                                        size="icon-sm"
+                                                                                        onClick={() => handleDeleteItem(item.id)}
+                                                                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                                                        title="Hapus item"
+                                                                                    >
+                                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                                    </Button>
+                                                                                </TableCell>
+                                                                            )}
                                                                         </TableRow>
-                                                                    )
-                                                                })}
-                                                            </TableBody>
-                                                        </Table>
+                                                                    ))}
+
+                                                                    {/* Subtotal row */}
+                                                                    <TableRow className="bg-muted/20 font-semibold hover:bg-muted/30">
+                                                                        <TableCell colSpan={isEditing ? 5 : 5} className="text-right text-sm pr-4 pl-4">
+                                                                            Subtotal
+                                                                        </TableCell>
+                                                                        <TableCell className="text-right text-sm font-mono pr-4">
+                                                                            {formatCurrency(subtotal)}
+                                                                        </TableCell>
+                                                                        {isEditing && <TableCell />}
+                                                                    </TableRow>
+                                                                </TableBody>
+                                                            </Table>
+                                                        </div>
+
+                                                        {/* Add Item Button */}
+                                                        {isEditing && (
+                                                            <div className="p-3 border-t bg-muted/20">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => handleAddItem(supplier)}
+                                                                    className="w-full gap-1.5 text-muted-foreground hover:text-foreground"
+                                                                >
+                                                                    <Plus className="h-3.5 w-3.5" />
+                                                                    Tambah Item
+                                                                </Button>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                            </TabsContent>
-                                        )
-                                    })}
-                                </Tabs>
+                                                </TabsContent>
+                                            )
+                                        })}
+                                    </Tabs>
+                                ) : (
+                                    isEditing && (
+                                        <div className="text-center py-8 border rounded-xl bg-muted/20">
+                                            <p className="text-muted-foreground mb-3">Belum ada supplier</p>
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => setShowAddSupplier(true)}
+                                                className="gap-1.5"
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                                Tambah Supplier
+                                            </Button>
+                                        </div>
+                                    )
+                                )}
 
                                 {/* Preview & Download Button */}
-                                <div className="border-t pt-6 mt-6">
-                                    <h4 className="text-sm font-medium mb-3 text-muted-foreground">Actions</h4>
-                                    <Button
-                                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md h-12"
-                                        onClick={(e) => {
-                                            e.preventDefault()
-                                            e.stopPropagation()
-                                            console.log('Button clicked!')
-                                            handlePreview()
-                                        }}
-                                        disabled={downloading || isEditing}
-                                        type="button"
-                                    >
-                                        {downloading ? (
-                                            <>
-                                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
-                                                <span>{loadingStatus || 'Processing...'}</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Eye className="mr-2 h-5 w-5" />
-                                                <span className="text-base font-medium">Preview & Download PDF</span>
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-
-                                {/* Actions */}
-                                <div className="flex gap-3 pt-6 mt-6 border-t">
-                                    {invoice.status === 'generated' && (
+                                {!isEditing && (
+                                    <div className="border-t pt-6 mt-6">
+                                        <h4 className="text-sm font-medium mb-3 text-muted-foreground">Actions</h4>
                                         <Button
-                                            variant="outline"
-                                            size="lg"
-                                            className="flex-1 shadow-sm hover:scale-[1.02] transition-transform border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
-                                            onClick={handleMarkComplete}
-                                            disabled={isEditing || markingComplete}
+                                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md h-12"
+                                            onClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                handlePreview()
+                                            }}
+                                            disabled={downloading}
+                                            type="button"
                                         >
-                                            {markingComplete ? (
+                                            {downloading ? (
                                                 <>
                                                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
-                                                    Memproses...
+                                                    <span>{loadingStatus || 'Processing...'}</span>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <CheckCircle className="mr-2 h-4 w-4" />
-                                                    Tandai Selesai
+                                                    <Eye className="mr-2 h-5 w-5" />
+                                                    <span className="text-base font-medium">Preview & Download PDF</span>
                                                 </>
                                             )}
                                         </Button>
-                                    )}
-                                    {invoice.status === 'completed' && (
-                                        <div className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-green-50 text-green-700 rounded-lg border border-green-200">
-                                            <CheckCircle className="h-5 w-5" />
-                                            <span className="font-medium">Invoice Selesai</span>
-                                        </div>
-                                    )}
-                                    <Button
-                                        variant="destructive"
-                                        size="lg"
-                                        className="flex-1 shadow-sm hover:scale-[1.02] transition-transform"
-                                        onClick={handleDelete}
-                                        disabled={isEditing || markingComplete}
-                                    >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Delete Invoice
-                                    </Button>
-                                </div>
+                                    </div>
+                                )}
+
+                                {/* Actions */}
+                                {!isEditing && (
+                                    <div className="flex gap-3 pt-6 mt-6 border-t">
+                                        {invoice.status === 'generated' && (
+                                            <Button
+                                                variant="outline"
+                                                size="lg"
+                                                className="flex-1 shadow-sm hover:scale-[1.02] transition-transform border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+                                                onClick={handleMarkComplete}
+                                                disabled={markingComplete}
+                                            >
+                                                {markingComplete ? (
+                                                    <>
+                                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                                                        Memproses...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <CheckCircle className="mr-2 h-4 w-4" />
+                                                        Tandai Selesai
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
+                                        {invoice.status === 'completed' && (
+                                            <div className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-green-50 text-green-700 rounded-lg border border-green-200">
+                                                <CheckCircle className="h-5 w-5" />
+                                                <span className="font-medium">Invoice Selesai</span>
+                                            </div>
+                                        )}
+                                        <Button
+                                            variant="destructive"
+                                            size="lg"
+                                            className="flex-1 shadow-sm hover:scale-[1.02] transition-transform"
+                                            onClick={handleDelete}
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete Invoice
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Add Supplier Dialog */}
+            <Dialog open={showAddSupplier} onOpenChange={setShowAddSupplier}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Tambah Supplier Baru</DialogTitle>
+                        <DialogDescription>
+                            Masukkan nama supplier dan nomor invoice untuk supplier baru.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-2">
+                        <div>
+                            <label className="text-sm font-medium">Nama Supplier</label>
+                            <Input
+                                value={newSupplierName}
+                                onChange={(e) => setNewSupplierName(e.target.value)}
+                                placeholder="Contoh: CV JAYAMEN"
+                                className="mt-1"
+                                autoFocus
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Nomor Invoice</label>
+                            <Input
+                                value={newSupplierInvoiceNumber}
+                                onChange={(e) => setNewSupplierInvoiceNumber(e.target.value)}
+                                placeholder="#KWITANSI0001"
+                                className="mt-1 font-mono"
+                            />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2">
+                            <Button variant="outline" onClick={() => setShowAddSupplier(false)}>
+                                Batal
+                            </Button>
+                            <Button onClick={handleAddSupplier}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Tambah
+                            </Button>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>
