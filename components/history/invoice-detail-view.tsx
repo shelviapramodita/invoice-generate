@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
-import { Trash2, Eye, X, Edit, Save, CheckCircle, Plus, CalendarIcon, Download } from 'lucide-react'
+import { Trash2, Eye, X, Edit, Save, CheckCircle, Plus, CalendarIcon, Download, FileDown, FileArchive, Files } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Dialog,
@@ -92,6 +92,7 @@ export function InvoiceDetailView({
     const [isEditing, setIsEditing] = useState(false)
     const [saving, setSaving] = useState(false)
     const [markingComplete, setMarkingComplete] = useState(false)
+    const [showDownloadOptions, setShowDownloadOptions] = useState(false)
 
     // Edit state
     const [editedItems, setEditedItems] = useState<InvoiceItem[]>([])
@@ -392,11 +393,8 @@ export function InvoiceDetailView({
             onDelete?.() // Refresh parent list
 
             if (andDownload) {
-                toast.success('Perubahan disimpan! Mengunduh PDF...')
-                // Small delay to let fetchDetail update the state with new pdf paths
-                setTimeout(() => {
-                    downloadAllAfterSave()
-                }, 500)
+                toast.success('Perubahan disimpan! Pilih opsi download.')
+                setShowDownloadOptions(true)
             } else {
                 toast.success('Perubahan berhasil disimpan dan PDF sudah di-regenerate!')
             }
@@ -408,54 +406,94 @@ export function InvoiceDetailView({
         }
     }
 
-    const downloadAllAfterSave = async () => {
+    // Fetch all generated PDFs from storage
+    const fetchGeneratedPDFs = async () => {
+        const response = await fetch(`/api/invoices/${invoiceId}`)
+        if (!response.ok) throw new Error('Failed to fetch updated invoice')
+        const result = await response.json()
+        const latestInvoice = result.data as InvoiceDetail
+
+        const supplierPdfMap: Record<string, { supplier: string; invoiceNumber: string; pdfPath: string }> = {}
+        for (const item of latestInvoice.items) {
+            if (!supplierPdfMap[item.supplier] && item.pdf_file_path && item.pdf_file_path !== 'client-side-download' && item.pdf_file_path !== 'pending-regeneration') {
+                supplierPdfMap[item.supplier] = {
+                    supplier: item.supplier,
+                    invoiceNumber: item.invoice_number,
+                    pdfPath: item.pdf_file_path,
+                }
+            }
+        }
+
+        const entries = Object.values(supplierPdfMap)
+        if (entries.length === 0) throw new Error('Tidak ada PDF yang tersedia')
+
+        const pdfs: { supplier: string; invoiceNumber: string; blob: Blob }[] = []
+        for (const entry of entries) {
+            const blob = await downloadFile('generated-pdfs', entry.pdfPath)
+            pdfs.push({ supplier: entry.supplier, invoiceNumber: entry.invoiceNumber, blob })
+        }
+
+        return { pdfs, batchName: latestInvoice.batch_name }
+    }
+
+    // Download option: individual files
+    const handleDownloadSeparate = async () => {
         setDownloading(true)
+        setShowDownloadOptions(false)
         try {
-            // Re-fetch the latest detail to get updated PDF paths
-            const response = await fetch(`/api/invoices/${invoiceId}`)
-            if (!response.ok) throw new Error('Failed to fetch updated invoice')
-            const result = await response.json()
-            const latestInvoice = result.data as InvoiceDetail
+            const { pdfs, batchName } = await fetchGeneratedPDFs()
+            const { downloadPDF } = await import('@/lib/pdf/pdf-generator')
+            const safeBatch = batchName?.replace(/[\/\\:*?"<>|]/g, '-')?.trim()
 
-            // Group items by supplier to get PDF paths
-            const supplierPdfMap: Record<string, { supplier: string; invoiceNumber: string; pdfPath: string }> = {}
-            for (const item of latestInvoice.items) {
-                if (!supplierPdfMap[item.supplier] && item.pdf_file_path && item.pdf_file_path !== 'client-side-download' && item.pdf_file_path !== 'pending-regeneration') {
-                    supplierPdfMap[item.supplier] = {
-                        supplier: item.supplier,
-                        invoiceNumber: item.invoice_number,
-                        pdfPath: item.pdf_file_path,
-                    }
-                }
+            for (const p of pdfs) {
+                const filename = safeBatch
+                    ? `${safeBatch}-${p.supplier}-${p.invoiceNumber}.pdf`
+                    : `Invoice-${p.supplier}-${p.invoiceNumber}.pdf`
+                downloadPDF(p.blob, filename)
             }
-
-            const entries = Object.values(supplierPdfMap)
-            if (entries.length === 0) {
-                toast.warning('Tidak ada PDF yang tersedia untuk didownload')
-                return
-            }
-
-            // Download all blobs
-            const pdfs: { supplier: string; invoiceNumber: string; blob: Blob }[] = []
-            for (const entry of entries) {
-                try {
-                    const blob = await downloadFile('generated-pdfs', entry.pdfPath)
-                    pdfs.push({ supplier: entry.supplier, invoiceNumber: entry.invoiceNumber, blob })
-                } catch (err) {
-                    console.error(`Failed to download PDF for ${entry.supplier}:`, err)
-                }
-            }
-
-            if (pdfs.length > 0) {
-                const { downloadAllPDFs } = await import('@/lib/pdf/pdf-generator')
-                await downloadAllPDFs(pdfs, latestInvoice.batch_name || undefined)
-                toast.success(`${pdfs.length} PDF berhasil diunduh!`)
-            } else {
-                toast.warning('Gagal mengunduh PDF')
-            }
+            toast.success(`${pdfs.length} PDF berhasil diunduh!`)
         } catch (error) {
-            console.error('Error downloading after save:', error)
-            toast.error(`Gagal mengunduh PDF: ${(error as Error).message}`)
+            toast.error(`Gagal mengunduh: ${(error as Error).message}`)
+        } finally {
+            setDownloading(false)
+        }
+    }
+
+    // Download option: merge into 1 PDF
+    const handleDownloadMerged = async () => {
+        setDownloading(true)
+        setShowDownloadOptions(false)
+        try {
+            const { pdfs, batchName } = await fetchGeneratedPDFs()
+            const { mergePDFs } = await import('@/lib/pdf/pdf-generator')
+            const safeBatch = batchName?.replace(/[\/\\:*?"<>|]/g, '-')?.trim()
+            const filename = safeBatch
+                ? `${safeBatch}-Merged.pdf`
+                : `Invoices-Merged-${Date.now()}.pdf`
+            await mergePDFs(pdfs, filename)
+            toast.success('PDF gabungan berhasil diunduh!')
+        } catch (error) {
+            toast.error(`Gagal menggabungkan PDF: ${(error as Error).message}`)
+        } finally {
+            setDownloading(false)
+        }
+    }
+
+    // Download option: ZIP
+    const handleDownloadZip = async () => {
+        setDownloading(true)
+        setShowDownloadOptions(false)
+        try {
+            const { pdfs, batchName } = await fetchGeneratedPDFs()
+            const { downloadAsZip } = await import('@/lib/pdf/pdf-generator')
+            const safeBatch = batchName?.replace(/[\/\\:*?"<>|]/g, '-')?.trim()
+            const filename = safeBatch
+                ? `Invoices-${safeBatch}.zip`
+                : `Invoices-${Date.now()}.zip`
+            await downloadAsZip(pdfs, filename)
+            toast.success('ZIP berhasil diunduh!')
+        } catch (error) {
+            toast.error(`Gagal membuat ZIP: ${(error as Error).message}`)
         } finally {
             setDownloading(false)
         }
@@ -1100,6 +1138,47 @@ export function InvoiceDetailView({
                                 Tambah
                             </Button>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Download Options Dialog */}
+            <Dialog open={showDownloadOptions} onOpenChange={setShowDownloadOptions}>
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Download Invoice</DialogTitle>
+                        <DialogDescription>
+                            Pilih opsi download:
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid grid-cols-3 gap-3 pt-2">
+                        <Button
+                            variant="outline"
+                            className="h-auto py-4 flex flex-col gap-2 items-center"
+                            onClick={handleDownloadSeparate}
+                            disabled={downloading}
+                        >
+                            <Download className="h-5 w-5" />
+                            <span className="text-sm font-medium">File Ini Saja</span>
+                        </Button>
+                        <Button
+                            variant="default"
+                            className="h-auto py-4 flex flex-col gap-2 items-center"
+                            onClick={handleDownloadMerged}
+                            disabled={downloading}
+                        >
+                            <Files className="h-5 w-5" />
+                            <span className="text-sm font-medium">Gabung Jadi 1 PDF</span>
+                        </Button>
+                        <Button
+                            variant="default"
+                            className="h-auto py-4 flex flex-col gap-2 items-center bg-zinc-800 hover:bg-zinc-700"
+                            onClick={handleDownloadZip}
+                            disabled={downloading}
+                        >
+                            <FileArchive className="h-5 w-5" />
+                            <span className="text-sm font-medium">Download ZIP ({suppliers.length} file)</span>
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
