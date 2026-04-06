@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { HistoryTable } from '@/components/history/history-table'
 import { HistoryFilters, FilterState } from '@/components/history/history-filters'
+import { UserMenu } from '@/components/auth/user-menu'
 
 interface InvoiceHistory {
     id: string
@@ -144,10 +145,13 @@ export default function HistoryPage() {
                             </Button>
                         </Link>
                     </div>
-                    <Button onClick={fetchHistory} disabled={loading} variant="outline">
-                        <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                        Refresh
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <Button onClick={fetchHistory} disabled={loading} variant="outline">
+                            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </Button>
+                        <UserMenu />
+                    </div>
                 </div>
 
                 {/* Main Content */}
