@@ -13,7 +13,7 @@ export async function updateSession(request: NextRequest) {
                     return request.cookies.getAll()
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) =>
+                    cookiesToSet.forEach(({ name, value }) =>
                         request.cookies.set(name, value)
                     )
                     supabaseResponse = NextResponse.next({ request })
@@ -25,6 +25,9 @@ export async function updateSession(request: NextRequest) {
         }
     )
 
+    // IMPORTANT: Do not run code between createServerClient and
+    // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+    // issues with users being randomly logged out.
     const {
         data: { user },
     } = await supabase.auth.getUser()
@@ -61,16 +64,22 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
-    // Get user profile (role + subscription)
-    const { data: profile } = await supabase
+    // Get user profile with error logging
+    const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', user.id)
         .single()
 
-    // Admin routes → must be admin
-    if (pathname.startsWith('/admin')) {
-        if (profile?.role !== 'admin') {
+    console.log('[Middleware]', pathname, '| user:', user.email, '| profile:', profile, '| error:', profileError?.message)
+
+    // If profile query fails (RLS issue), try to determine role from user metadata
+    const userRole = profile?.role || user.user_metadata?.role
+
+    // /subscribe route → accessible to all authenticated users
+    if (pathname.startsWith('/subscribe')) {
+        // If admin, redirect to home (admins don't need subscription)
+        if (userRole === 'admin') {
             const url = request.nextUrl.clone()
             url.pathname = '/'
             return NextResponse.redirect(url)
@@ -78,14 +87,19 @@ export async function updateSession(request: NextRequest) {
         return supabaseResponse
     }
 
-    // /subscribe route → accessible to all authenticated users
-    if (pathname.startsWith('/subscribe')) {
+    // Admin routes → must be admin
+    if (pathname.startsWith('/admin')) {
+        if (userRole !== 'admin') {
+            const url = request.nextUrl.clone()
+            url.pathname = '/'
+            return NextResponse.redirect(url)
+        }
         return supabaseResponse
     }
 
     // Protected routes (/, /history, /upload) → need active subscription
     // Admins bypass subscription check
-    if (profile?.role === 'admin') {
+    if (userRole === 'admin') {
         return supabaseResponse
     }
 
