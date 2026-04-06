@@ -152,7 +152,13 @@ export default function SubscribePage() {
                 <div>
                     <h2 className="text-lg font-semibold">Invoice Generator</h2>
                     <p className="text-sm text-muted-foreground">
-                        Hai, {profile?.name || profile?.email || 'User'}
+                        {(() => {
+                            const h = new Date().getHours()
+                            if (h >= 5 && h < 11) return 'Selamat Pagi'
+                            if (h >= 11 && h < 15) return 'Selamat Siang'
+                            if (h >= 15 && h < 18) return 'Selamat Sore'
+                            return 'Selamat Malam'
+                        })()}, {profile?.name || profile?.email || 'User'}
                     </p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={handleLogout}>
