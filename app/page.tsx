@@ -2,11 +2,17 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileText, Upload, History, FileSpreadsheet } from 'lucide-react'
+import { UserMenu } from '@/components/auth/user-menu'
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900">
-      <div className="container mx-auto px-4 py-16">
+      {/* Top Bar */}
+      <div className="flex items-center justify-end px-6 py-4">
+        <UserMenu />
+      </div>
+
+      <div className="container mx-auto px-4 pb-16">
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold tracking-tight mb-4">
