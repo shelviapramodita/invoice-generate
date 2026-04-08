@@ -2,13 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, CreditCard, Clock, CheckCircle } from 'lucide-react'
+import { Users, CreditCard, Clock, CheckCircle, Ban, MessageSquare } from 'lucide-react'
 
 interface Stats {
     totalUsers: number
     activeSubscriptions: number
     pendingSubscriptions: number
     totalRevenue: number
+    suspendedUsers: number
+    bannedUsers: number
+    pendingAppeals: number
 }
 
 export default function AdminDashboard() {
@@ -17,30 +20,40 @@ export default function AdminDashboard() {
         activeSubscriptions: 0,
         pendingSubscriptions: 0,
         totalRevenue: 0,
+        suspendedUsers: 0,
+        bannedUsers: 0,
+        pendingAppeals: 0,
     })
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         async function fetchStats() {
             try {
-                const [usersRes, subsRes, settingsRes] = await Promise.all([
+                const [usersRes, subsRes, settingsRes, appealsRes] = await Promise.all([
                     fetch('/api/admin/users'),
                     fetch('/api/admin/subscriptions'),
                     fetch('/api/admin/settings'),
+                    fetch('/api/appeals'),
                 ])
 
                 const users = await usersRes.json()
                 const subs = await subsRes.json()
                 const settings = await settingsRes.json()
+                const appeals = await appealsRes.json()
 
                 const allSubs = subs.data || []
+                const allUsers = users.data || []
+                const allAppeals = appeals.data || []
                 const price = settings.data?.price || 0
 
                 setStats({
-                    totalUsers: users.data?.length || 0,
+                    totalUsers: allUsers.length,
                     activeSubscriptions: allSubs.filter((s: any) => s.status === 'active').length,
                     pendingSubscriptions: allSubs.filter((s: any) => s.status === 'pending').length,
                     totalRevenue: allSubs.filter((s: any) => s.status === 'active').length * price,
+                    suspendedUsers: allUsers.filter((u: any) => u.account_status === 'suspended').length,
+                    bannedUsers: allUsers.filter((u: any) => u.account_status === 'banned').length,
+                    pendingAppeals: allAppeals.filter((a: any) => a.status === 'pending').length,
                 })
             } catch (error) {
                 console.error('Error fetching stats:', error)
@@ -84,6 +97,27 @@ export default function AdminDashboard() {
             icon: CreditCard,
             color: 'text-purple-600',
             bg: 'bg-purple-50',
+        },
+        {
+            title: 'Suspended',
+            value: stats.suspendedUsers,
+            icon: Clock,
+            color: 'text-orange-600',
+            bg: 'bg-orange-50',
+        },
+        {
+            title: 'Banned',
+            value: stats.bannedUsers,
+            icon: Ban,
+            color: 'text-red-600',
+            bg: 'bg-red-50',
+        },
+        {
+            title: 'Pending Banding',
+            value: stats.pendingAppeals,
+            icon: MessageSquare,
+            color: 'text-indigo-600',
+            bg: 'bg-indigo-50',
         },
     ]
 
