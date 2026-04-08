@@ -4,12 +4,13 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Users, CreditCard, Settings, ArrowLeft, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, CreditCard, Settings, ArrowLeft, LogOut, History } from 'lucide-react'
 
 const navItems = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
     { href: '/admin/users', label: 'Users', icon: Users },
+    { href: '/admin/login-history', label: 'Login History', icon: History },
     { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -18,6 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const router = useRouter()
 
     const handleLogout = async () => {
+        localStorage.removeItem('invoice_session_id')
         const supabase = createClient()
         await supabase.auth.signOut()
         router.push('/login')

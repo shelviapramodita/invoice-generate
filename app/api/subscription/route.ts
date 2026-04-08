@@ -41,7 +41,7 @@ export async function GET() {
             data: { config, subscription, profile },
         })
     } catch (error: any) {
-        console.error('[API] Error:', error)
+        console.error('Subscription error:', error)
         return NextResponse.json(
             { error: 'Failed to fetch subscription', message: error.message },
             { status: 500 }
@@ -65,6 +65,24 @@ export async function POST(request: NextRequest) {
         if (!file) {
             return NextResponse.json(
                 { error: 'Payment proof is required' },
+                { status: 400 }
+            )
+        }
+
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+        if (!allowedTypes.includes(file.type)) {
+            return NextResponse.json(
+                { error: 'Format file tidak didukung. Gunakan JPG, PNG, atau PDF.' },
+                { status: 400 }
+            )
+        }
+
+        // Validate file size (max 5MB)
+        const maxSize = 5 * 1024 * 1024
+        if (file.size > maxSize) {
+            return NextResponse.json(
+                { error: 'Ukuran file maksimal 5MB' },
                 { status: 400 }
             )
         }
@@ -98,7 +116,7 @@ export async function POST(request: NextRequest) {
             })
 
         if (uploadError) {
-            console.error('[API] Upload error:', uploadError)
+            console.error('Upload error:', uploadError)
             throw new Error(`Failed to upload: ${uploadError.message}`)
         }
 
@@ -115,13 +133,13 @@ export async function POST(request: NextRequest) {
             .single()
 
         if (insertError) {
-            console.error('[API] Insert error:', insertError)
+            console.error('Insert error:', insertError)
             throw new Error(`Failed to create subscription: ${insertError.message}`)
         }
 
         return NextResponse.json({ success: true, data: subscription })
     } catch (error: any) {
-        console.error('[API] Error:', error)
+        console.error('Subscription error:', error)
         return NextResponse.json(
             { error: 'Failed to submit subscription', message: error.message },
             { status: 500 }

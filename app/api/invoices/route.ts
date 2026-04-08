@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 // Pastikan route ini selalu dynamic dan tidak ter-cache di Vercel
 export const dynamic = 'force-dynamic'
 
-// GET /api/invoices - Get all invoice history
+// GET /api/invoices - Get invoice history (filtered per user, admin sees all)
 export async function GET() {
     try {
         // Validate env vars first
@@ -12,7 +12,7 @@ export async function GET() {
         const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
         if (!supabaseUrl || !supabaseKey) {
-            console.error('[API] Missing Supabase env vars:', {
+            console.error('Missing Supabase env vars:', {
                 hasUrl: !!supabaseUrl,
                 hasKey: !!supabaseKey,
             })
@@ -27,18 +27,40 @@ export async function GET() {
 
         const supabase = await createClient()
 
-        const { data, error } = await supabase
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // Check if admin
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+        const isAdmin = profile?.role === 'admin'
+
+        // Build query - admin sees all, user sees only their own
+        let query = supabase
             .from('invoice_history')
             .select('*, invoice_items(supplier)')
             .order('created_at', { ascending: false })
             .limit(50)
 
+        if (!isAdmin) {
+            query = query.eq('user_id', user.id)
+        }
+
+        const { data, error } = await query
+
         if (error) {
-            console.error('[API] Supabase query error:', error)
+            console.error('Supabase query error:', error)
             return NextResponse.json(
                 {
                     error: 'Database error',
-                    message: error.message,
+                    message: 'Gagal memuat data invoice',
                 },
                 { status: 500 }
             )
@@ -55,7 +77,7 @@ export async function GET() {
             data: historyWithSuppliers,
         })
     } catch (error: any) {
-        console.error('[API] Unexpected error:', error)
+        console.error('Unexpected error:', error)
         return NextResponse.json(
             {
                 error: 'Internal server error',

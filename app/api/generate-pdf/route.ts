@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateInvoicePDFsWithNumbers, GeneratedPDF } from '@/lib/pdf/pdf-generator'
 import { ParsedExcelData, InvoiceItemForm } from '@/types'
 
-// Check if Supabase is configured
 function isSupabaseConfigured(): boolean {
     return !!(
         process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -24,7 +23,6 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        // ─── Step 1: Generate PDFs (always runs, no Supabase needed) ───────────
         const parsedDate = new Date(invoiceDate + 'T12:00:00')
         const pdfs = await generateInvoicePDFsWithNumbers(parsedData as ParsedExcelData, {
             invoiceDate: parsedDate,
@@ -33,7 +31,6 @@ export async function POST(request: NextRequest) {
             customerNames,
         })
 
-        // Convert PDFs to base64 immediately so we can always return them
         const pdfsData = await Promise.all(
             pdfs.map(async (pdf) => ({
                 supplier: pdf.supplier,
@@ -42,7 +39,6 @@ export async function POST(request: NextRequest) {
             }))
         )
 
-        // ─── Step 2: Save to Supabase (optional — only if configured) ──────────
         let historyId: string | null = null
 
         if (isSupabaseConfigured()) {
@@ -50,7 +46,9 @@ export async function POST(request: NextRequest) {
                 const { createInvoiceHistory, createInvoiceItems } = await import('@/lib/db/queries')
                 const { createClient } = await import('@/lib/supabase/server')
 
-                // Calculate summary
+                const supabase = await createClient()
+                const { data: { user } } = await supabase.auth.getUser()
+
                 const suppliers = Object.keys(parsedData)
                 let totalItems = 0
                 let grandTotal = 0
@@ -60,7 +58,6 @@ export async function POST(request: NextRequest) {
                     items.forEach((item) => { grandTotal += item.total })
                 })
 
-                console.log('[API] Saving invoice to database...')
                 const invoiceHistory = await createInvoiceHistory({
                     batch_name: batchName || undefined,
                     invoice_date: parsedDate,
@@ -68,11 +65,10 @@ export async function POST(request: NextRequest) {
                     total_items: totalItems,
                     grand_total: grandTotal,
                     status: 'generated',
+                    user_id: user?.id || '',
                 })
                 historyId = invoiceHistory.id
 
-                // Upload PDFs to Supabase Storage
-                const supabase = await createClient()
                 const allItems: Array<InvoiceItemForm & { supplier: string; invoice_number: string; pdf_file_path: string }> = []
 
                 for (const pdf of pdfs) {
@@ -89,7 +85,7 @@ export async function POST(request: NextRequest) {
 
                     const pdfPath = uploadError ? 'client-side-download' : uploadData.path
                     if (uploadError) {
-                        console.warn(`[API] Storage upload failed for ${pdf.supplier}:`, uploadError.message)
+                        console.warn('Storage upload failed:', uploadError.message)
                     }
 
                     const supplierItems = parsedData[pdf.supplier] || []
@@ -99,13 +95,9 @@ export async function POST(request: NextRequest) {
                 }
 
                 await createInvoiceItems(invoiceHistory.id, allItems)
-                console.log('[API] ✅ Invoice saved to database:', invoiceHistory.id)
             } catch (dbError) {
-                // DB save failed — log it but don't block the user from getting their PDF
-                console.error('[API] ⚠️ Failed to save to database (non-critical):', (dbError as Error).message)
+                console.error('Failed to save to database:', (dbError as Error).message)
             }
-        } else {
-            console.log('[API] Supabase not configured — skipping database save. PDFs will be available for client-side download only.')
         }
 
         return NextResponse.json({ historyId, pdfs: pdfsData })
@@ -113,13 +105,12 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error('Error generating PDFs:', error)
         return NextResponse.json(
-            { error: 'Failed to generate PDFs', details: (error as Error).message },
+            { error: 'Failed to generate PDFs' },
             { status: 500 }
         )
     }
 }
 
-// Helper to convert Blob to base64
 async function blobToBase64(blob: Blob): Promise<string> {
     const buffer = await blob.arrayBuffer()
     return Buffer.from(buffer).toString('base64')

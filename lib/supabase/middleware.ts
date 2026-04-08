@@ -53,7 +53,10 @@ export async function updateSession(request: NextRequest) {
         if (isPublicRoute) return supabaseResponse
         const url = request.nextUrl.clone()
         url.pathname = '/login'
-        url.searchParams.set('redirect', pathname)
+        // Only allow relative redirects to prevent open redirect
+        if (pathname.startsWith('/') && !pathname.startsWith('//')) {
+            url.searchParams.set('redirect', pathname)
+        }
         return NextResponse.redirect(url)
     }
 
@@ -71,10 +74,12 @@ export async function updateSession(request: NextRequest) {
         .eq('id', user.id)
         .single()
 
-    console.log('[Middleware]', pathname, '| user:', user.email, '| profile:', profile, '| error:', profileError?.message)
+    if (profileError) {
+        console.error('Profile fetch error:', profileError.message)
+    }
 
-    // If profile query fails (RLS issue), try to determine role from user metadata
-    const userRole = profile?.role || user.user_metadata?.role
+    // Only trust role from profiles table, never from user metadata
+    const userRole = profile?.role || 'user'
 
     // /subscribe route → accessible to all authenticated users
     if (pathname.startsWith('/subscribe')) {
