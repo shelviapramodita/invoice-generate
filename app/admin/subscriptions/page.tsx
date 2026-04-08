@@ -23,7 +23,6 @@ import {
 import { toast } from 'sonner'
 import { Check, X, Eye, ImageIcon } from 'lucide-react'
 import { format } from 'date-fns'
-import { createClient } from '@/lib/supabase/client'
 
 interface Subscription {
     id: string
@@ -50,6 +49,7 @@ export default function AdminSubscriptionsPage() {
 
     // Proof preview
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+    const [previewIsPdf, setPreviewIsPdf] = useState(false)
 
     const fetchSubs = async () => {
         try {
@@ -112,13 +112,12 @@ export default function AdminSubscriptionsPage() {
 
     const handleViewProof = async (path: string) => {
         try {
-            const supabase = createClient()
-            const { data } = await supabase.storage
-                .from('payment-proofs')
-                .createSignedUrl(path, 300) // 5 min signed URL
+            const res = await fetch(`/api/admin/payment-proof?path=${encodeURIComponent(path)}`)
+            const data = await res.json()
 
-            if (data?.signedUrl) {
-                setPreviewUrl(data.signedUrl)
+            if (data.success && data.url) {
+                setPreviewIsPdf(path.toLowerCase().endsWith('.pdf'))
+                setPreviewUrl(data.url)
             } else {
                 toast.error('Gagal memuat bukti pembayaran')
             }
@@ -295,7 +294,7 @@ export default function AdminSubscriptionsPage() {
 
             {/* Payment Proof Preview */}
             <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)}>
-                <DialogContent className="sm:max-w-2xl max-h-[80vh]">
+                <DialogContent className="!max-w-[95vw] w-[95vw] h-[92vh] max-h-[92vh] p-4 flex flex-col">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <ImageIcon className="h-5 w-5" />
@@ -303,13 +302,23 @@ export default function AdminSubscriptionsPage() {
                         </DialogTitle>
                     </DialogHeader>
                     {previewUrl && (
-                        <div className="flex items-center justify-center overflow-auto max-h-[60vh]">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src={previewUrl}
-                                alt="Bukti Pembayaran"
-                                className="max-w-full rounded-lg"
-                            />
+                        <div className="flex-1 min-h-0">
+                            {previewIsPdf ? (
+                                <iframe
+                                    src={previewUrl}
+                                    className="w-full h-full rounded-lg border"
+                                    title="Bukti Pembayaran"
+                                />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center overflow-auto">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={previewUrl}
+                                        alt="Bukti Pembayaran"
+                                        className="max-w-full max-h-full rounded-lg object-contain"
+                                    />
+                                </div>
+                            )}
                         </div>
                     )}
                 </DialogContent>

@@ -3,37 +3,33 @@ import { parseExcelFile, getParsedDataSummary } from '@/lib/excel-parser'
 import { generateInvoicePDFs } from '@/lib/pdf/pdf-generator'
 import { uploadExcelFile, uploadPDFFile } from '@/lib/storage/file-upload'
 import { createInvoiceHistory, createInvoiceItems } from '@/lib/db/queries'
+import { createClient } from '@/lib/supabase/server'
 import { InvoiceItemForm } from '@/types'
 
 export async function POST(request: NextRequest) {
     try {
-        // Parse form data
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
         const formData = await request.formData()
         const excelFile = formData.get('excelFile') as File | null
         const invoiceDateStr = formData.get('invoiceDate') as string | null
         const batchName = formData.get('batchName') as string | null
 
-        // Validation
         if (!excelFile) {
-            return NextResponse.json(
-                { error: 'Excel file is required' },
-                { status: 400 }
-            )
+            return NextResponse.json({ error: 'Excel file is required' }, { status: 400 })
         }
 
         if (!invoiceDateStr) {
-            return NextResponse.json(
-                { error: 'Invoice date is required' },
-                { status: 400 }
-            )
+            return NextResponse.json({ error: 'Invoice date is required' }, { status: 400 })
         }
 
         const invoiceDate = new Date(invoiceDateStr)
 
-        // Step 1: Parse Excel
-        console.log('[API] Step 1: Parsing Excel file...')
         const parseResult = await parseExcelFile(excelFile)
-
         if (!parseResult.success || !parseResult.data) {
             return NextResponse.json(
                 { error: parseResult.error || 'Failed to parse Excel file' },
@@ -44,19 +40,13 @@ export async function POST(request: NextRequest) {
         const parsedData = parseResult.data
         const summary = getParsedDataSummary(parsedData)
 
-        // Step 2: Upload Excel file to storage
-        console.log('[API] Step 2: Uploading Excel file...')
         const excelPath = await uploadExcelFile(excelFile, excelFile.name)
 
-        // Step 3: Generate PDFs
-        console.log('[API] Step 3: Generating PDFs...')
         const pdfs = await generateInvoicePDFs(parsedData, {
             invoiceDate,
             batchName: batchName || undefined,
         })
 
-        // Step 4: Upload PDFs to storage
-        console.log('[API] Step 4: Uploading PDFs...')
         const uploadedPDFs = await Promise.all(
             pdfs.map(async (pdf) => {
                 const filename = batchName
@@ -64,17 +54,10 @@ export async function POST(request: NextRequest) {
                     : `Invoice-${pdf.supplier}-${pdf.invoiceNumber}.pdf`
 
                 const path = await uploadPDFFile(pdf.blob, filename)
-                return {
-                    ...pdf,
-                    pdfPath: path,
-                }
+                return { ...pdf, pdfPath: path }
             })
         )
 
-        // Step 5: Save to database
-        console.log('[API] Step 5: Saving to database...')
-
-        // Create invoice history
         const invoiceHistory = await createInvoiceHistory({
             batch_name: batchName || undefined,
             invoice_date: invoiceDate,
@@ -82,9 +65,9 @@ export async function POST(request: NextRequest) {
             total_items: summary.totalItems,
             grand_total: summary.grandTotal,
             status: 'generated',
+            user_id: user.id,
         })
 
-        // Prepare invoice items with PDF paths
         const allItems: Array<
             InvoiceItemForm & {
                 supplier: string
@@ -105,12 +88,8 @@ export async function POST(request: NextRequest) {
             })
         })
 
-        // Create invoice items
         await createInvoiceItems(invoiceHistory.id, allItems)
 
-        console.log('[API] ✅ Success! Invoice generated and saved.')
-
-        // Return success with download URLs
         return NextResponse.json({
             success: true,
             message: `Successfully generated ${pdfs.length} invoices`,
@@ -127,12 +106,9 @@ export async function POST(request: NextRequest) {
             },
         })
     } catch (error: any) {
-        console.error('[API] Error generating invoices:', error)
+        console.error('Error generating invoices:', error)
         return NextResponse.json(
-            {
-                error: 'Failed to generate invoices',
-                message: error.message || 'Unknown error',
-            },
+            { error: 'Failed to generate invoices' },
             { status: 500 }
         )
     }

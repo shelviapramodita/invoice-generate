@@ -16,6 +16,8 @@ import {
     ChevronDown,
     Clock,
     CheckCircle,
+    Monitor,
+    History,
 } from 'lucide-react'
 
 interface UserProfile {
@@ -24,6 +26,8 @@ interface UserProfile {
     role: string
     subscription_status?: string
     expires_at?: string | null
+    last_login_at?: string | null
+    last_login_device?: string | null
 }
 
 export function UserMenu() {
@@ -56,7 +60,7 @@ export function UserMenu() {
 
             const { data: prof } = await supabase
                 .from('profiles')
-                .select('name, email, role')
+                .select('name, email, role, last_login_at, last_login_device')
                 .eq('id', user.id)
                 .single()
 
@@ -75,6 +79,8 @@ export function UserMenu() {
                 ...prof,
                 subscription_status: sub?.status,
                 expires_at: sub?.expires_at,
+                last_login_at: prof.last_login_at,
+                last_login_device: prof.last_login_device,
             })
         } catch (error) {
             console.error('Error fetching profile:', error)
@@ -84,6 +90,7 @@ export function UserMenu() {
     }
 
     const handleLogout = async () => {
+        localStorage.removeItem('invoice_session_id')
         const supabase = createClient()
         await supabase.auth.signOut()
         router.push('/login')
@@ -170,6 +177,21 @@ export function UserMenu() {
                         )}
                     </div>
 
+                    {/* Last Login Info */}
+                    {profile.last_login_at && (
+                        <div className="px-4 py-2.5 border-b">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Monitor className="h-3.5 w-3.5 shrink-0" />
+                                <div>
+                                    <p>Login terakhir: {new Date(profile.last_login_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                                    {profile.last_login_device && (
+                                        <p className="text-muted-foreground/70">{profile.last_login_device}</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Menu Items */}
                     <div className="p-1.5">
                         {isAdmin && (
@@ -197,6 +219,14 @@ export function UserMenu() {
                                 >
                                     <Users className="h-4 w-4 text-muted-foreground" />
                                     Manage Users
+                                </Link>
+                                <Link
+                                    href="/admin/login-history"
+                                    onClick={() => setOpen(false)}
+                                    className="flex items-center gap-3 px-3 py-2 text-sm rounded-lg hover:bg-muted/50 transition-colors"
+                                >
+                                    <History className="h-4 w-4 text-muted-foreground" />
+                                    Login History
                                 </Link>
                                 <Link
                                     href="/admin/settings"

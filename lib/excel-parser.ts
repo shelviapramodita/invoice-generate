@@ -99,7 +99,6 @@ function findHeaderAndCreateMapping(rawRows: unknown[][]): { headerRowIndex: num
 
         // Found header if we have at least 4 required columns
         if (foundColumns >= 4) {
-            console.log(`[Excel] Header found at row ${i + 1}, column mapping:`, columnMap)
             return { headerRowIndex: i, columnMap }
         }
     }
@@ -107,19 +106,8 @@ function findHeaderAndCreateMapping(rawRows: unknown[][]): { headerRowIndex: num
     return null
 }
 
-/**
- * Parse a cell value to number — supports Indonesian number format.
- * Indonesian: titik (.) = pemisah ribuan, koma (,) = desimal
- * Contoh: "1.280" → 1280, "1.966.500" → 1966500, "1,5" → 1.5
- */
 function parseCellToNumber(value: unknown): number {
-    // Jika sudah number dari XLSX (raw integer/float murni), langsung kembalikan
-    if (typeof value === 'number') {
-        // Jika angka bukan integer (e.g. 1.28 bukan 1280), kemungkinan salah parse
-        // Tapi kita tidak bisa tahu context-nya dari sini, kembalikan as-is
-        console.log(`[Parser] Cell value is already number: ${value}`)
-        return value
-    }
+    if (typeof value === 'number') return value
     if (value === null || value === undefined || value === '') return 0
 
     const str = String(value).trim()
@@ -128,9 +116,6 @@ function parseCellToNumber(value: unknown): number {
     const cleaned = str.replace(/^Rp\.?\s*/i, '').trim()
 
     const result = parseIndonesianNumber(cleaned)
-    if (str !== cleaned || result !== parseFloat(str)) {
-        console.log(`[Parser] Parsed "${str}" → "${cleaned}" → ${result}`)
-    }
     return result
 }
 
@@ -147,12 +132,7 @@ function parseIndonesianNumber(str: string): number {
     const hasDot = str.includes('.')
     const hasComma = str.includes(',')
     
-    const isDebug = str.includes('1280') || str.includes('1244')
-    if (isDebug) console.log(`[parseIndonesianNumber] Input: "${str}", hasDot: ${hasDot}, hasComma: ${hasComma}`)
-
     if (hasDot && hasComma) {
-        // Keduanya ada: format seperti "1.966.500,50" atau "1,966,500.50"
-        // Deteksi: jika koma setelah titik terakhir → titik = ribuan, koma = desimal (ID format)
         const lastDot = str.lastIndexOf('.')
         const lastComma = str.lastIndexOf(',')
         if (lastComma > lastDot) {
@@ -235,18 +215,6 @@ function transformRowToExcelRow(row: unknown[], columnMap: Record<string, number
     const qty = columnMap['QTY'] !== undefined ? parseCellToNumber(qtyRaw) : 0
     
     const uraian = columnMap['URAIAN'] !== undefined ? String(row[columnMap['URAIAN']] ?? '').trim() : ''
-    
-    // Log EVERY row detail for debugging
-    console.log(`[Transform] Row: "${uraian}" - QTY raw: ${qtyRaw} (${typeof qtyRaw}), parsed: ${qty}`)
-    
-    // Extra detail for specific items
-    if (uraian.includes('Diamond') || uraian.includes('Fullcream')) {
-        console.log(`*** DIAMOND DETECTED ***`)
-        console.log(`  Full row data:`, row)
-        console.log(`  Column map:`, columnMap)
-        console.log(`  QTY column index: ${columnMap['QTY']}`)
-        console.log(`  QTY raw at index: ${row[columnMap['QTY']]}`)
-    }
     
     return {
         URAIAN: uraian,
@@ -334,7 +302,6 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                     
                     if (supplierName) {
                         supplierLines.push({ rowIndex: i, supplier: supplierName })
-                        console.log(`[Excel] Row ${i + 1}: Found NO REK supplier: "${supplierName}" (account: ${accountNumber})`)
                     }
                 }
             }
@@ -373,46 +340,35 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             const stringValues = rawRow.map(v => String(v || '').trim())
             const noRekValue = stringValues.find(v => /NO\s*REK\./i.test(v))
             if (noRekValue) {
-                console.log(`[Excel] Row ${i + 1} SKIPPED (NO REK line):`, rawRow)
                 skippedRows++
                 continue
             }
 
             // Check if this is a non-data row (category, total, etc.)
             if (shouldSkipRow(tempObj)) {
-                console.log(`[Excel] Row ${i + 1} SKIPPED by shouldSkipRow:`, rawRow)
                 skippedRows++
                 continue
             }
 
             // Transform to ExcelRow format using column mapping
             const transformedRow = transformRowToExcelRow(rawRow, columnMap)
-            console.log(`[Excel] Row ${i + 1} transformed:`, transformedRow)
 
             // If SUPPLIER is empty in the row, look ahead to find the next NO REK supplier
             if (!transformedRow.SUPPLIER || transformedRow.SUPPLIER.length === 0) {
                 const lookaheadSupplier = findSupplierForRow(i)
                 if (lookaheadSupplier) {
-                    console.log(`[Excel] Row ${i + 1}: SUPPLIER empty, assigned from look-ahead: "${lookaheadSupplier}"`)
                     transformedRow.SUPPLIER = lookaheadSupplier
                 }
             }
 
             // Skip rows that don't have valid data
             if (!isValidDataRow(transformedRow)) {
-                console.log(`[Excel] Row ${i + 1} SKIPPED by isValidDataRow:`, {
-                    URAIAN: transformedRow.URAIAN,
-                    QTY: transformedRow.QTY,
-                    SUPPLIER: transformedRow.SUPPLIER,
-                    SATUAN: transformedRow.SATUAN,
-                })
                 skippedRows++
                 continue
             }
 
             // If still no supplier, reject
             if (!transformedRow.SUPPLIER || transformedRow.SUPPLIER.length === 0) {
-                console.log(`[Excel] Row ${i + 1} REJECTED: No supplier found for "${transformedRow.URAIAN}"`)
                 invalidRows.push({ row: i + 1, errors: ['Supplier tidak ditemukan. Pastikan ada baris "NO REK" di file Excel.'] })
                 continue
             }
@@ -420,11 +376,9 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             try {
                 // Validate row against schema
                 const validated = excelRowSchema.parse(transformedRow)
-                console.log(`[Excel] Row ${i + 1} VALID ✅ → ${transformedRow.URAIAN} (qty: ${transformedRow.QTY}, supplier: ${transformedRow.SUPPLIER})`)
                 validRows.push(validated as ExcelRow)
             } catch (error: any) {
                 const errors = error.errors?.map((e: any) => e.message) || ['Format data tidak valid']
-                console.log(`[Excel] Row ${i + 1} REJECTED by schema ❌:`, { row: transformedRow, errors })
                 invalidRows.push({ row: i + 1, errors }) // +1 for 1-indexed Excel row
             }
         }

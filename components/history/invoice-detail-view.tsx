@@ -200,7 +200,6 @@ export function InvoiceDetailView({
         }
     }
 
-    // ========== EDIT HANDLERS ==========
 
     const handleEdit = () => {
         if (invoice) {
@@ -373,8 +372,6 @@ export function InvoiceDetailView({
             if (deletedItemIds.length > 0) {
                 payload.delete_item_ids = deletedItemIds
             }
-
-            console.log('[Edit] Saving payload:', payload)
 
             const response = await fetch(`/api/invoices/${invoiceId}`, {
                 method: 'PATCH',

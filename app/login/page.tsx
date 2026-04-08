@@ -41,6 +41,19 @@ function LoginForm() {
 
             if (error) throw error
 
+            // Generate unique session ID and register it with device info
+            const sessionId = crypto.randomUUID()
+            localStorage.setItem('invoice_session_id', sessionId)
+
+            await fetch('/api/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    device_info: navigator.userAgent,
+                }),
+            })
+
             toast.success('Login berhasil!')
             router.push(redirect)
             router.refresh()

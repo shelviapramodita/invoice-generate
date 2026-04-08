@@ -1,9 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { InvoiceItemForm } from '@/types'
 
-/**
- * Create new invoice history record
- */
 export async function createInvoiceHistory(data: {
     batch_name?: string
     invoice_date: Date
@@ -11,6 +8,7 @@ export async function createInvoiceHistory(data: {
     total_items: number
     grand_total: number
     status: 'generated' | 'completed'
+    user_id: string
 }) {
     const supabase = await createClient()
 
@@ -19,26 +17,19 @@ export async function createInvoiceHistory(data: {
         .insert({
             batch_name: data.batch_name || null,
             invoice_date: data.invoice_date.toISOString(),
-            // excel_file_path: data.excel_file_path, // Removed - column doesn't exist in Supabase
             total_suppliers: data.total_suppliers,
             total_items: data.total_items,
             grand_total: data.grand_total,
             status: data.status,
+            user_id: data.user_id,
         })
         .select()
         .single()
 
-    if (error) {
-        console.error('Error creating invoice history:', error)
-        throw new Error(`Failed to create invoice history: ${error.message}`)
-    }
-
+    if (error) throw new Error(`Failed to create invoice history: ${error.message}`)
     return invoice
 }
 
-/**
- * Create invoice items (bulk insert)
- */
 export async function createInvoiceItems(
     historyId: string,
     items: Array<InvoiceItemForm & {
@@ -66,17 +57,10 @@ export async function createInvoiceItems(
         .insert(itemsToInsert)
         .select()
 
-    if (error) {
-        console.error('Error creating invoice items:', error)
-        throw new Error(`Failed to create invoice items: ${error.message}`)
-    }
-
+    if (error) throw new Error(`Failed to create invoice items: ${error.message}`)
     return data
 }
 
-/**
- * Get all invoice history (sorted by created_at desc)
- */
 export async function getInvoiceHistory(limit = 50) {
     const supabase = await createClient()
 
@@ -86,53 +70,32 @@ export async function getInvoiceHistory(limit = 50) {
         .order('created_at', { ascending: false })
         .limit(limit)
 
-    if (error) {
-        console.error('Error fetching invoice history:', error)
-        throw new Error(`Failed to fetch invoice history: ${error.message}`)
-    }
-
+    if (error) throw new Error(`Failed to fetch invoice history: ${error.message}`)
     return data
 }
 
-/**
- * Get invoice by ID with all items
- */
 export async function getInvoiceById(id: string) {
     const supabase = await createClient()
 
-    // Get invoice history
     const { data: invoice, error: invoiceError } = await supabase
         .from('invoice_history')
         .select('*')
         .eq('id', id)
         .single()
 
-    if (invoiceError) {
-        console.error('Error fetching invoice:', invoiceError)
-        throw new Error(`Failed to fetch invoice: ${invoiceError.message}`)
-    }
+    if (invoiceError) throw new Error(`Failed to fetch invoice: ${invoiceError.message}`)
 
-    // Get invoice items
     const { data: items, error: itemsError } = await supabase
         .from('invoice_items')
         .select('*')
         .eq('history_id', id)
         .order('supplier', { ascending: true })
 
-    if (itemsError) {
-        console.error('Error fetching invoice items:', itemsError)
-        throw new Error(`Failed to fetch invoice items: ${itemsError.message}`)
-    }
+    if (itemsError) throw new Error(`Failed to fetch invoice items: ${itemsError.message}`)
 
-    return {
-        ...invoice,
-        items,
-    }
+    return { ...invoice, items }
 }
 
-/**
- * Update invoice history
- */
 export async function updateInvoiceHistory(
     id: string,
     updates: Partial<{
@@ -149,32 +112,20 @@ export async function updateInvoiceHistory(
         .select()
         .single()
 
-    if (error) {
-        console.error('Error updating invoice history:', error)
-        throw new Error(`Failed to update invoice history: ${error.message}`)
-    }
-
+    if (error) throw new Error(`Failed to update invoice history: ${error.message}`)
     return data
 }
 
-/**
- * Delete invoice history and all related items
- */
 export async function deleteInvoiceHistory(id: string) {
     const supabase = await createClient()
 
-    // Get PDF file paths before deleting
     const { data: items, error: fetchError } = await supabase
         .from('invoice_items')
         .select('pdf_file_path')
         .eq('history_id', id)
 
-    if (fetchError) {
-        console.error('Error fetching invoice items for deletion:', fetchError)
-        throw new Error(`Failed to fetch invoice items: ${fetchError.message}`)
-    }
+    if (fetchError) throw new Error(`Failed to fetch invoice items: ${fetchError.message}`)
 
-    // Collect unique PDF paths to delete
     const pdfPaths = Array.from(
         new Set(
             items
@@ -183,46 +134,25 @@ export async function deleteInvoiceHistory(id: string) {
         ) || []
     )
 
-    // Delete items first (cascade should handle this, but explicit is safer)
     const { error: itemsError } = await supabase
         .from('invoice_items')
         .delete()
         .eq('history_id', id)
+    if (itemsError) throw new Error(`Failed to delete invoice items: ${itemsError.message}`)
 
-    if (itemsError) {
-        console.error('Error deleting invoice items:', itemsError)
-        throw new Error(`Failed to delete invoice items: ${itemsError.message}`)
-    }
-
-    // Delete invoice history
     const { error } = await supabase
         .from('invoice_history')
         .delete()
         .eq('id', id)
+    if (error) throw new Error(`Failed to delete invoice history: ${error.message}`)
 
-    if (error) {
-        console.error('Error deleting invoice history:', error)
-        throw new Error(`Failed to delete invoice history: ${error.message}`)
-    }
-
-    // Delete PDF files from storage
     if (pdfPaths.length > 0) {
-        const { error: storageError } = await supabase.storage
-            .from('generated-pdfs')
-            .remove(pdfPaths)
-
-        if (storageError) {
-            console.error('Error deleting PDF files:', storageError)
-            // Don't throw - data already deleted, just log warning
-        }
+        await supabase.storage.from('generated-pdfs').remove(pdfPaths)
     }
 
     return { success: true }
 }
 
-/**
- * Bulk delete invoice histories and all related items
- */
 export async function bulkDeleteInvoiceHistory(ids: string[]) {
     const supabase = await createClient()
 
@@ -230,18 +160,12 @@ export async function bulkDeleteInvoiceHistory(ids: string[]) {
         throw new Error('No invoice IDs provided')
     }
 
-    // Get all PDF file paths before deleting
     const { data: items, error: fetchError } = await supabase
         .from('invoice_items')
         .select('pdf_file_path')
         .in('history_id', ids)
+    if (fetchError) throw new Error(`Failed to fetch invoice items: ${fetchError.message}`)
 
-    if (fetchError) {
-        console.error('Error fetching invoice items for bulk deletion:', fetchError)
-        throw new Error(`Failed to fetch invoice items: ${fetchError.message}`)
-    }
-
-    // Collect unique PDF paths to delete
     const pdfPaths = Array.from(
         new Set(
             items
@@ -250,38 +174,20 @@ export async function bulkDeleteInvoiceHistory(ids: string[]) {
         ) || []
     )
 
-    // Delete items first
     const { error: itemsError } = await supabase
         .from('invoice_items')
         .delete()
         .in('history_id', ids)
+    if (itemsError) throw new Error(`Failed to delete invoice items: ${itemsError.message}`)
 
-    if (itemsError) {
-        console.error('Error bulk deleting invoice items:', itemsError)
-        throw new Error(`Failed to delete invoice items: ${itemsError.message}`)
-    }
-
-    // Delete invoice histories
     const { error } = await supabase
         .from('invoice_history')
         .delete()
         .in('id', ids)
+    if (error) throw new Error(`Failed to delete invoice history: ${error.message}`)
 
-    if (error) {
-        console.error('Error bulk deleting invoice history:', error)
-        throw new Error(`Failed to delete invoice history: ${error.message}`)
-    }
-
-    // Delete PDF files from storage
     if (pdfPaths.length > 0) {
-        const { error: storageError } = await supabase.storage
-            .from('generated-pdfs')
-            .remove(pdfPaths)
-
-        if (storageError) {
-            console.error('Error deleting PDF files:', storageError)
-            // Don't throw - data already deleted, just log warning
-        }
+        await supabase.storage.from('generated-pdfs').remove(pdfPaths)
     }
 
     return { success: true, deletedCount: ids.length }

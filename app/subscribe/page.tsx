@@ -12,10 +12,6 @@ import {
     Clock,
     XCircle,
     LogOut,
-    FileText,
-    Zap,
-    Shield,
-    CreditCard,
 } from 'lucide-react'
 
 interface SubscriptionConfig {
@@ -23,6 +19,10 @@ interface SubscriptionConfig {
     price: number
     duration_days: number
     description: string
+    bank_name: string
+    bank_account_number: string
+    bank_account_holder: string
+    features: string[]
 }
 
 interface Subscription {
@@ -59,6 +59,7 @@ export default function SubscribePage() {
     const [subscription, setSubscription] = useState<Subscription | null>(null)
     const [profile, setProfile] = useState<Profile | null>(null)
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
+    const [isDragging, setIsDragging] = useState(false)
 
     useEffect(() => {
         fetchData()
@@ -113,7 +114,36 @@ export default function SubscribePage() {
         }
     }
 
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault()
+        setIsDragging(false)
+        const file = e.dataTransfer.files?.[0]
+        if (file) {
+            const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+            if (!validTypes.includes(file.type)) {
+                toast.error('Format file tidak didukung. Gunakan JPG, PNG, atau PDF.')
+                return
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error('Ukuran file maksimal 5MB')
+                return
+            }
+            setSelectedFile(file)
+        }
+    }
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+        setIsDragging(true)
+    }
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault()
+        setIsDragging(false)
+    }
+
     const handleLogout = async () => {
+        localStorage.removeItem('invoice_session_id')
         const supabase = createClient()
         await supabase.auth.signOut()
         router.push('/login')
@@ -138,12 +168,13 @@ export default function SubscribePage() {
         return null
     }
 
-    const features = [
-        { icon: FileText, text: 'Generate invoice PDF tanpa batas' },
-        { icon: Zap, text: 'Upload Excel & auto-generate' },
-        { icon: Shield, text: 'Akses history & edit invoice' },
-        { icon: CreditCard, text: 'Download PDF, ZIP, & merge' },
+    const defaultFeatures = [
+        'Generate invoice PDF tanpa batas',
+        'Upload Excel & auto-generate',
+        'Akses history & edit invoice',
+        'Download PDF, ZIP, & merge',
     ]
+    const featureList = config?.features?.length ? config.features : defaultFeatures
 
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900">
@@ -217,12 +248,12 @@ export default function SubscribePage() {
                                     {config?.description || 'Akses semua fitur Invoice Generator tanpa batas.'}
                                 </p>
                                 <div className="space-y-2.5">
-                                    {features.map((feature, i) => (
+                                    {featureList.map((feature, i) => (
                                         <div key={i} className="flex items-center gap-2.5">
                                             <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center shrink-0">
                                                 <Check className="h-3.5 w-3.5 text-green-600" />
                                             </div>
-                                            <span className="text-sm">{feature.text}</span>
+                                            <span className="text-sm">{feature}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -242,15 +273,15 @@ export default function SubscribePage() {
                                     <div className="rounded-lg bg-muted/50 p-3 space-y-1.5 text-sm mb-3">
                                         <div className="flex justify-between">
                                             <span className="text-muted-foreground">Bank</span>
-                                            <span className="font-medium">BCA</span>
+                                            <span className="font-medium">{config?.bank_name || 'BCA'}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-muted-foreground">No. Rekening</span>
-                                            <span className="font-mono font-medium">1234567890</span>
+                                            <span className="font-mono font-medium">{config?.bank_account_number || '1234567890'}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-muted-foreground">Atas Nama</span>
-                                            <span className="font-medium">PT Invoice Generator</span>
+                                            <span className="font-medium">{config?.bank_account_holder || 'PT Invoice Generator'}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-muted-foreground">Nominal</span>
@@ -270,18 +301,30 @@ export default function SubscribePage() {
                                     />
                                     <div
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="flex-1 min-h-[80px] border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors mb-3"
+                                        onDrop={handleDrop}
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        className={`flex-1 min-h-[80px] border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors mb-3 ${
+                                            isDragging
+                                                ? 'border-primary bg-primary/5'
+                                                : 'hover:border-primary/50 hover:bg-muted/30'
+                                        }`}
                                     >
                                         {selectedFile ? (
                                             <>
                                                 <Check className="h-6 w-6 text-green-600 mb-1" />
                                                 <p className="text-sm font-medium truncate max-w-[200px]">{selectedFile.name}</p>
-                                                <p className="text-xs text-muted-foreground">Klik untuk ganti</p>
+                                                <p className="text-xs text-muted-foreground">Klik atau drag untuk ganti</p>
+                                            </>
+                                        ) : isDragging ? (
+                                            <>
+                                                <Upload className="h-6 w-6 text-primary mb-1" />
+                                                <p className="text-sm font-medium text-primary">Lepaskan file di sini</p>
                                             </>
                                         ) : (
                                             <>
                                                 <Upload className="h-6 w-6 text-muted-foreground mb-1" />
-                                                <p className="text-sm font-medium">Upload bukti transfer</p>
+                                                <p className="text-sm font-medium">Drag & drop atau klik untuk upload</p>
                                                 <p className="text-xs text-muted-foreground">JPG, PNG, PDF (maks 5MB)</p>
                                             </>
                                         )}
