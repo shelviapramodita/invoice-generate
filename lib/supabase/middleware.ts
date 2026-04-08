@@ -70,7 +70,7 @@ export async function updateSession(request: NextRequest) {
     // Get user profile with error logging
     const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, account_status')
         .eq('id', user.id)
         .single()
 
@@ -80,6 +80,24 @@ export async function updateSession(request: NextRequest) {
 
     // Only trust role from profiles table, never from user metadata
     const userRole = profile?.role || 'user'
+    const accountStatus = profile?.account_status || 'active'
+
+    // Check if account is blocked (suspended/banned) — except on /blocked page itself
+    if ((accountStatus === 'suspended' || accountStatus === 'banned') && userRole !== 'admin') {
+        if (!pathname.startsWith('/blocked')) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/blocked'
+            return NextResponse.redirect(url)
+        }
+        return supabaseResponse
+    }
+
+    // If on /blocked page but account is active, redirect home
+    if (pathname.startsWith('/blocked')) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        return NextResponse.redirect(url)
+    }
 
     // /subscribe route → accessible to all authenticated users
     if (pathname.startsWith('/subscribe')) {
