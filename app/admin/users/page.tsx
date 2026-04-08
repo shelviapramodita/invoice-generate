@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,8 +13,44 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { toast } from 'sonner'
-import { Shield, User } from 'lucide-react'
+import { Shield, User, Clock } from 'lucide-react'
 import { format } from 'date-fns'
+
+function useCountdown(users: UserWithSub[]) {
+    const [now, setNow] = useState(Date.now())
+
+    useEffect(() => {
+        const hasActive = users.some(
+            (u) => u.subscription?.status === 'active' && u.subscription.expires_at
+        )
+        if (!hasActive) return
+
+        const interval = setInterval(() => setNow(Date.now()), 1000)
+        return () => clearInterval(interval)
+    }, [users])
+
+    return useCallback(
+        (expiresAt: string) => {
+            const diff = new Date(expiresAt).getTime() - now
+            if (diff <= 0) return { expired: true, days: 0, hours: 0, minutes: 0, seconds: 0, text: 'Expired' }
+
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+            return {
+                expired: false,
+                days,
+                hours,
+                minutes,
+                seconds,
+                text: `${days}h ${hours}j ${minutes}m ${seconds}d`,
+            }
+        },
+        [now]
+    )
+}
 
 interface UserWithSub {
     id: string
@@ -32,6 +68,7 @@ export default function AdminUsersPage() {
     const [users, setUsers] = useState<UserWithSub[]>([])
     const [loading, setLoading] = useState(true)
     const [updating, setUpdating] = useState<string | null>(null)
+    const getCountdown = useCountdown(users)
 
     const fetchUsers = async () => {
         try {
@@ -115,22 +152,37 @@ export default function AdminUsersPage() {
                                         </TableCell>
                                         <TableCell>
                                             {user.subscription ? (
-                                                <Badge
-                                                    variant={
-                                                        user.subscription.status === 'active'
-                                                            ? 'default'
-                                                            : user.subscription.status === 'pending'
-                                                                ? 'secondary'
-                                                                : 'destructive'
-                                                    }
-                                                    className={
-                                                        user.subscription.status === 'active'
-                                                            ? 'bg-green-100 text-green-700 hover:bg-green-100'
-                                                            : ''
-                                                    }
-                                                >
-                                                    {user.subscription.status}
-                                                </Badge>
+                                                <div className="space-y-1">
+                                                    <Badge
+                                                        variant={
+                                                            user.subscription.status === 'active'
+                                                                ? 'default'
+                                                                : user.subscription.status === 'pending'
+                                                                    ? 'secondary'
+                                                                    : 'destructive'
+                                                        }
+                                                        className={
+                                                            user.subscription.status === 'active'
+                                                                ? 'bg-green-100 text-green-700 hover:bg-green-100'
+                                                                : ''
+                                                        }
+                                                    >
+                                                        {user.subscription.status}
+                                                    </Badge>
+                                                    {user.subscription.status === 'active' && user.subscription.expires_at && (() => {
+                                                        const cd = getCountdown(user.subscription.expires_at)
+                                                        return (
+                                                            <div className={`flex items-center gap-1 text-xs font-mono ${cd.expired ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                                                <Clock className="h-3 w-3" />
+                                                                {cd.expired ? (
+                                                                    <span>Expired</span>
+                                                                ) : (
+                                                                    <span>{cd.days}h {cd.hours}j {cd.minutes}m {cd.seconds}d</span>
+                                                                )}
+                                                            </div>
+                                                        )
+                                                    })()}
+                                                </div>
                                             ) : (
                                                 <span className="text-xs text-muted-foreground">-</span>
                                             )}
