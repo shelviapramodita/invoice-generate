@@ -27,6 +27,9 @@ export interface GeneratedPDF {
     supplier: string
     blob: Blob
     invoiceNumber: string
+    // Optional label identifying which day/batch this PDF belongs to (e.g. "21 Jan 2026").
+    // Used by preview sidebar and ZIP folder grouping when generating across multiple days.
+    groupLabel?: string
 }
 
 /**
@@ -188,11 +191,20 @@ export async function downloadAsZip(pdfs: GeneratedPDF[], filename: string) {
         const JSZip = (await import('jszip')).default
         const zip = new JSZip()
 
-        // Add each PDF to the zip
+        // If any PDF has a groupLabel, organize into folders by group to prevent
+        // filename collisions across days that share the same invoice number.
+        const hasGroups = pdfs.some(p => p.groupLabel)
+
         pdfs.forEach((pdf) => {
-            const pdfName = `Invoice-${pdf.supplier}-${pdf.invoiceNumber}.pdf`
-            console.log('Adding to ZIP:', pdfName)
-            zip.file(pdfName, pdf.blob)
+            const safeSupplier = pdf.supplier.replace(/[\/\\:*?"<>|]/g, '-')
+            const safeInvoice = pdf.invoiceNumber.replace(/[\/\\:*?"<>|]/g, '-')
+            const baseName = `Invoice-${safeSupplier}-${safeInvoice}.pdf`
+            if (hasGroups && pdf.groupLabel) {
+                const safeGroup = pdf.groupLabel.replace(/[\/\\:*?"<>|]/g, '-').trim()
+                zip.file(`${safeGroup}/${baseName}`, pdf.blob)
+            } else {
+                zip.file(baseName, pdf.blob)
+            }
         })
 
         console.log('Generating ZIP blob...')

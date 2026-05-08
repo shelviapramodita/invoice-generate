@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { ExcelRow, ParsedExcelData, InvoiceItemForm } from '@/types'
+import { ExcelRow, ParsedExcelData, InvoiceItemForm, SheetEntry, WorkbookParseResult, SheetType } from '@/types'
 import { excelRowSchema, normalizeSupplierName } from './validators'
 import { getSupplierConfig } from '@/data/cv-reference'
 
@@ -9,6 +9,117 @@ interface ParseResult {
     error?: string
     invalidRows?: Array<{ row: number; errors: string[] }>
     skippedRows?: number
+}
+
+// Indonesian month names → 0-indexed month number
+const ID_MONTHS: Record<string, number> = {
+    JAN: 0, JANUARI: 0,
+    FEB: 1, FEBRUARI: 1,
+    MAR: 2, MARET: 2,
+    APR: 3, APRIL: 3,
+    MEI: 4, MAY: 4,
+    JUN: 5, JUNI: 5,
+    JUL: 6, JULI: 6,
+    AGU: 7, AGS: 7, AGUSTUS: 7, AUG: 7,
+    SEP: 8, SEPT: 8, SEPTEMBER: 8,
+    OKT: 9, OKTOBER: 9, OCT: 9,
+    NOV: 10, NOP: 10, NOVEMBER: 10, NOPEMBER: 10,
+    DES: 11, DESEMBER: 11, DEC: 11, DESEMBER2: 11,
+}
+
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+
+function isPlausibleYear(y: number): boolean {
+    return y >= 2020 && y <= 2050
+}
+
+/**
+ * Parse a sheet name to detect date or date-range.
+ * Examples handled:
+ *   "21 JAN 2026 DONE"      → single-day, 2026-01-21
+ *   "1 FEB 2026 done"        → single-day
+ *   "8 JAN 2026 (BAHAN BAKU) DONE" → single-day
+ *   "9-13 NOV DONE"          → multi-day range, Nov 9–13 (year inferred or undefined)
+ *   "30 NOV - 4 DES"         → multi-day spanning months
+ *   "Copy of 23-27 NOV"      → multi-day
+ *   "2026"                   → unparseable
+ */
+export function parseSheetName(name: string, fallbackYear?: number): {
+    type: SheetType
+    detectedDate?: Date
+    dateRangeStart?: Date
+    dateRangeEnd?: Date
+    label: string
+} {
+    const cleaned = name
+        .replace(/\(.*?\)/g, ' ')
+        .replace(/\b(DONE|done|Done|BAHAN\s*BAKU|Copy\s*of)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase()
+
+    const monthAlt = Object.keys(ID_MONTHS).join('|')
+
+    // Pattern: "<D>-<D> <MONTH> <YEAR?>" or "<D> <MONTH> - <D> <MONTH> <YEAR?>"
+    // Same-month range: "9-13 NOV 2025"
+    const rangeSameMonth = new RegExp(`^(\\d{1,2})\\s*-\\s*(\\d{1,2})\\s+(${monthAlt})(?:\\s+(\\d{2,4}))?`, 'i')
+    // Cross-month range: "30 NOV - 4 DES 2025"
+    const rangeCrossMonth = new RegExp(`^(\\d{1,2})\\s+(${monthAlt})\\s*-\\s*(\\d{1,2})\\s+(${monthAlt})(?:\\s+(\\d{2,4}))?`, 'i')
+    // Single day: "21 JAN 2026" or "21 JAN"
+    const single = new RegExp(`^(\\d{1,2})\\s+(${monthAlt})(?:\\s+(\\d{2,4}))?`, 'i')
+
+    let m = cleaned.match(rangeCrossMonth)
+    if (m) {
+        const d1 = parseInt(m[1], 10)
+        const mo1 = ID_MONTHS[m[2].toUpperCase()]
+        const d2 = parseInt(m[3], 10)
+        const mo2 = ID_MONTHS[m[4].toUpperCase()]
+        const yearRaw = m[5] ? parseInt(m[5], 10) : (fallbackYear ?? new Date().getFullYear())
+        const year = isPlausibleYear(yearRaw) ? yearRaw : (fallbackYear ?? new Date().getFullYear())
+        // If first month > second, the range spans year boundary (Dec → Jan)
+        const startYear = mo1 > mo2 ? year - 1 : year
+        const start = new Date(Date.UTC(startYear, mo1, d1))
+        const end = new Date(Date.UTC(year, mo2, d2))
+        return {
+            type: 'multi-day',
+            dateRangeStart: start,
+            dateRangeEnd: end,
+            label: `${d1} ${MONTH_LABELS[mo1]} – ${d2} ${MONTH_LABELS[mo2]} ${year}`,
+        }
+    }
+
+    m = cleaned.match(rangeSameMonth)
+    if (m) {
+        const d1 = parseInt(m[1], 10)
+        const d2 = parseInt(m[2], 10)
+        const mo = ID_MONTHS[m[3].toUpperCase()]
+        const yearRaw = m[4] ? parseInt(m[4], 10) : (fallbackYear ?? new Date().getFullYear())
+        const year = isPlausibleYear(yearRaw) ? yearRaw : (fallbackYear ?? new Date().getFullYear())
+        const start = new Date(Date.UTC(year, mo, d1))
+        const end = new Date(Date.UTC(year, mo, d2))
+        return {
+            type: 'multi-day',
+            dateRangeStart: start,
+            dateRangeEnd: end,
+            label: `${d1}–${d2} ${MONTH_LABELS[mo]} ${year}`,
+        }
+    }
+
+    m = cleaned.match(single)
+    if (m) {
+        const d = parseInt(m[1], 10)
+        const mo = ID_MONTHS[m[2].toUpperCase()]
+        const yearRaw = m[3] ? parseInt(m[3], 10) : (fallbackYear ?? new Date().getFullYear())
+        const year = isPlausibleYear(yearRaw) ? yearRaw : (fallbackYear ?? new Date().getFullYear())
+        const date = new Date(Date.UTC(year, mo, d))
+        return {
+            type: 'single-day',
+            detectedDate: date,
+            label: `${d} ${MONTH_LABELS[mo]} ${year}`,
+        }
+    }
+
+    return { type: 'unparseable', label: name.trim() || '(no name)' }
 }
 
 // Required columns for invoice data
@@ -242,30 +353,15 @@ function isValidDataRow(row: Partial<ExcelRow>): boolean {
 }
 
 /**
- * Parse Excel file dan group by supplier
+ * Parse pre-loaded raw rows from a single worksheet into ParsedExcelData.
+ * Extracted from parseExcelFile so it can be reused per-sheet by parseExcelWorkbook.
  */
-export async function parseExcelFile(file: File): Promise<ParseResult> {
+function parseWorksheetRows(rawRows: unknown[][]): ParseResult {
     try {
-        // Read file as ArrayBuffer
-        const arrayBuffer = await file.arrayBuffer()
-
-        // Parse Excel dengan raw:true untuk mendapat numeric values yang akurat
-        // Ini penting untuk menghindari format string yang terdistorsi oleh cell formatting di Excel
-        const workbook = XLSX.read(arrayBuffer, { type: 'array', raw: true })
-
-        // Get first sheet
-        const firstSheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[firstSheetName]
-
-        // Get raw data as 2D array
-        // raw:true → angka akan di-return sebagai number, bukan string
-        // Ini lebih akurat dibanding raw:false yang bisa terdistorsi oleh custom formatting di Excel
-        const rawRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: undefined })
-
         if (rawRows.length === 0) {
             return {
                 success: false,
-                error: 'File Excel kosong atau tidak memiliki data',
+                error: 'Sheet kosong atau tidak memiliki data',
             }
         }
 
@@ -421,6 +517,115 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
     } catch (error: any) {
         return {
             success: false,
+            error: error.message || 'Gagal mem-parse file Excel',
+        }
+    }
+}
+
+/**
+ * Parse Excel file (first sheet only). Backward-compat wrapper.
+ */
+export async function parseExcelFile(file: File): Promise<ParseResult> {
+    try {
+        const arrayBuffer = await file.arrayBuffer()
+        const workbook = XLSX.read(arrayBuffer, { type: 'array', raw: true })
+        const firstSheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[firstSheetName]
+        const rawRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: undefined })
+        return parseWorksheetRows(rawRows)
+    } catch (error: any) {
+        return {
+            success: false,
+            error: error.message || 'Gagal mem-parse file Excel',
+        }
+    }
+}
+
+/**
+ * Parse the entire workbook: every sheet is attempted, with metadata about
+ * detected date(s) from the sheet name. Sheets that fail to parse are still
+ * returned with an `error` field so the UI can show why.
+ */
+export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResult> {
+    try {
+        const arrayBuffer = await file.arrayBuffer()
+        const workbook = XLSX.read(arrayBuffer, { type: 'array', raw: true })
+
+        if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+            return { success: false, sheets: [], error: 'File tidak memiliki sheet' }
+        }
+
+        // Determine fallback year: median plausible year from any single-day sheet
+        const detectedYears: number[] = []
+        for (const name of workbook.SheetNames) {
+            const meta = parseSheetName(name)
+            if (meta.detectedDate) detectedYears.push(meta.detectedDate.getUTCFullYear())
+            if (meta.dateRangeEnd) detectedYears.push(meta.dateRangeEnd.getUTCFullYear())
+        }
+        const fallbackYear = detectedYears.length > 0
+            ? detectedYears.sort((a, b) => a - b)[Math.floor(detectedYears.length / 2)]
+            : new Date().getFullYear()
+
+        const sheets: SheetEntry[] = workbook.SheetNames.map(sheetName => {
+            const meta = parseSheetName(sheetName, fallbackYear)
+            const ws = workbook.Sheets[sheetName]
+
+            if (!ws || !ws['!ref']) {
+                return {
+                    sheetName,
+                    type: meta.type,
+                    detectedDate: meta.detectedDate?.toISOString().split('T')[0],
+                    dateRangeStart: meta.dateRangeStart?.toISOString().split('T')[0],
+                    dateRangeEnd: meta.dateRangeEnd?.toISOString().split('T')[0],
+                    label: meta.label,
+                    totalItems: 0,
+                    grandTotal: 0,
+                    error: 'Sheet kosong',
+                }
+            }
+
+            const rawRows: unknown[][] = XLSX.utils.sheet_to_json(ws, {
+                header: 1,
+                raw: true,
+                defval: undefined,
+            })
+
+            const result = parseWorksheetRows(rawRows)
+
+            if (!result.success || !result.data) {
+                return {
+                    sheetName,
+                    type: meta.type,
+                    detectedDate: meta.detectedDate?.toISOString().split('T')[0],
+                    dateRangeStart: meta.dateRangeStart?.toISOString().split('T')[0],
+                    dateRangeEnd: meta.dateRangeEnd?.toISOString().split('T')[0],
+                    label: meta.label,
+                    totalItems: 0,
+                    grandTotal: 0,
+                    error: result.error,
+                }
+            }
+
+            const summary = getParsedDataSummary(result.data)
+
+            return {
+                sheetName,
+                type: meta.type,
+                detectedDate: meta.detectedDate?.toISOString().split('T')[0],
+                dateRangeStart: meta.dateRangeStart?.toISOString().split('T')[0],
+                dateRangeEnd: meta.dateRangeEnd?.toISOString().split('T')[0],
+                label: meta.label,
+                data: result.data,
+                totalItems: summary.totalItems,
+                grandTotal: summary.grandTotal,
+            }
+        })
+
+        return { success: true, sheets }
+    } catch (error: any) {
+        return {
+            success: false,
+            sheets: [],
             error: error.message || 'Gagal mem-parse file Excel',
         }
     }

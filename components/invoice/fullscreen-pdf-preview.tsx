@@ -189,6 +189,14 @@ export function FullScreenPDFPreview({
                                         )}>
                                             {pdf.invoiceNumber}
                                         </div>
+                                        {pdf.groupLabel && (
+                                            <div className={cn(
+                                                "text-[11px] mt-0.5",
+                                                selectedPdf === pdf ? "opacity-80" : "opacity-50"
+                                            )}>
+                                                {pdf.groupLabel}
+                                            </div>
+                                        )}
                                     </button>
                                 ))}
                             </div>
