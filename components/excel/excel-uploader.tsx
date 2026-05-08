@@ -2,14 +2,14 @@
 
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, X } from 'lucide-react'
+import { Upload, FileSpreadsheet, AlertCircle, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { parseExcelFile } from '@/lib/excel-parser'
-import { ParsedExcelData } from '@/types'
+import { parseExcelWorkbook } from '@/lib/excel-parser'
+import { SheetEntry } from '@/types'
 
 interface ExcelUploaderProps {
-    onParsed: (data: ParsedExcelData, fileName: string) => void
+    onParsed: (sheets: SheetEntry[], fileName: string) => void
 }
 
 export function ExcelUploader({ onParsed }: ExcelUploaderProps) {
@@ -26,7 +26,7 @@ export function ExcelUploader({ onParsed }: ExcelUploaderProps) {
         setParsing(true)
 
         try {
-            const result = await parseExcelFile(selectedFile)
+            const result = await parseExcelWorkbook(selectedFile)
 
             if (!result.success) {
                 setError(result.error || 'Gagal mem-parse file')
@@ -34,9 +34,16 @@ export function ExcelUploader({ onParsed }: ExcelUploaderProps) {
                 return
             }
 
-            if (result.data) {
-                onParsed(result.data, selectedFile.name)
+            // Filter to sheets that produced parsed data (drop empty / fully unparseable)
+            const usable = result.sheets.filter(s => s.data && s.totalItems > 0)
+
+            if (usable.length === 0) {
+                setError('Tidak ada sheet yang berisi data invoice yang valid')
+                setParsing(false)
+                return
             }
+
+            onParsed(usable, selectedFile.name)
         } catch (err: any) {
             setError(err.message || 'Terjadi kesalahan')
         } finally {
@@ -83,7 +90,7 @@ export function ExcelUploader({ onParsed }: ExcelUploaderProps) {
                                     Drag & drop file Excel atau klik untuk browse
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                    Mendukung format .xlsx, .xls, .csv
+                                    Mendukung .xlsx, .xls, .csv — multi-sheet didukung (1 sheet per hari)
                                 </p>
                             </>
                         )}
@@ -104,7 +111,7 @@ export function ExcelUploader({ onParsed }: ExcelUploaderProps) {
                                 {parsing && (
                                     <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
                                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                        Memproses file...
+                                        Memproses semua sheet...
                                     </div>
                                 )}
                                 {error && (

@@ -74,3 +74,25 @@ export interface InvoiceSummary {
     subtotal: number
     itemCount: number
 }
+
+// Sheet metadata after parsing a workbook with multiple sheets
+export type SheetType = 'single-day' | 'multi-day' | 'unparseable'
+
+export interface SheetEntry {
+    sheetName: string
+    type: SheetType
+    detectedDate?: string // ISO date string (YYYY-MM-DD) — for single-day
+    dateRangeStart?: string // ISO — for multi-day
+    dateRangeEnd?: string // ISO — for multi-day
+    label: string // human-readable label, e.g. "21 Jan 2026" or "9–13 Nov"
+    data?: ParsedExcelData
+    totalItems: number
+    grandTotal: number
+    error?: string
+}
+
+export interface WorkbookParseResult {
+    success: boolean
+    sheets: SheetEntry[]
+    error?: string
+}
