@@ -14,11 +14,17 @@ import { SheetPicker } from '@/components/excel/sheet-picker'
 import { InvoicePreview } from '@/components/invoice/invoice-preview'
 import { FullScreenPDFPreview } from '@/components/invoice/fullscreen-pdf-preview'
 import { CustomerNameInput } from '@/components/invoice/customer-name-input'
-import { SheetEntry } from '@/types'
+import { SheetEntry, SheetCategory } from '@/types'
+import { extractSppgNameFromFilename } from '@/lib/text-normalizer'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+
+const CATEGORY_LABELS: Record<SheetCategory, string> = {
+    'operasional': 'Operasional',
+    'operasional-galon': 'Operasional Galon',
+}
 
 // Per-sheet configuration the user fills in before generating
 interface SheetConfig {
@@ -37,22 +43,33 @@ interface GeneratedPDFEntry {
     groupLabel?: string
 }
 
-function defaultBatchName(date: Date): string {
-    return `Kwitansi SPPG Tambak - ${format(date, 'dd/MM/yyyy')}`
+/**
+ * Build the auto-detected batch name for a sheet.
+ * Format: "Kwitansi SPPG <Name> - [<Category> ]DD/MM/YYYY"
+ *   "RAB SPPG Tambak.xlsx" + "8 APRIL 2026 DONE" → "Kwitansi SPPG Tambak - 08/04/2026"
+ *   "RAB SPPG Tambak.xlsx" + "OPS 8 APRIL 2026" → "Kwitansi SPPG Tambak - Operasional 08/04/2026"
+ *   "RAB SPPG Tambak.xlsx" + "OPS GALON 8 APRIL 2026" → "Kwitansi SPPG Tambak - Operasional Galon 08/04/2026"
+ */
+function defaultBatchName(date: Date, sppgName: string, category?: SheetCategory): string {
+    const dateStr = format(date, 'dd/MM/yyyy')
+    const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
+    const categoryStr = category ? `${CATEGORY_LABELS[category]} ` : ''
+    return `Kwitansi ${sppg} - ${categoryStr}${dateStr}`
 }
 
-function buildSheetConfig(sheet: SheetEntry): SheetConfig {
+function buildSheetConfig(sheet: SheetEntry, sppgName: string): SheetConfig {
     const date = sheet.detectedDate ? new Date(sheet.detectedDate + 'T12:00:00') : new Date()
     const numbers: Record<string, string> = {}
     const customers: Record<string, string> = {}
     const suppliers = sheet.data ? Object.keys(sheet.data) : []
+    const customerName = sppgName ? `SPPG ${sppgName}` : 'SPPG Tambak'
     suppliers.forEach((supplier, index) => {
         numbers[supplier] = `#KWITANSI${String(index + 1).padStart(4, '0')}`
-        customers[supplier] = 'SPPG Tambak'
+        customers[supplier] = customerName
     })
     return {
         invoiceDate: date,
-        batchName: defaultBatchName(date),
+        batchName: defaultBatchName(date, sppgName, sheet.category),
         invoiceNumbers: numbers,
         customerNames: customers,
     }
@@ -60,6 +77,7 @@ function buildSheetConfig(sheet: SheetEntry): SheetConfig {
 
 export default function UploadPage() {
     const [sheets, setSheets] = useState<SheetEntry[]>([])
+    const [sppgName, setSppgName] = useState<string>('Tambak') // detected from filename
     const [selectedSheetNames, setSelectedSheetNames] = useState<string[]>([])
     const [configs, setConfigs] = useState<Record<string, SheetConfig>>({})
     const [previewSheetName, setPreviewSheetName] = useState<string | null>(null)
@@ -68,7 +86,10 @@ export default function UploadPage() {
     const [showPreview, setShowPreview] = useState(false)
     const [generatedPDFs, setGeneratedPDFs] = useState<GeneratedPDFEntry[]>([])
 
-    const handleParsed = (parsedSheets: SheetEntry[]) => {
+    const handleParsed = (parsedSheets: SheetEntry[], fileName: string) => {
+        // Detect SPPG name from filename (e.g. "RAB SPPG Tambak (3).xlsx" → "Tambak")
+        const detectedSppg = extractSppgNameFromFilename(fileName) || 'Tambak'
+        setSppgName(detectedSppg)
         setSheets(parsedSheets)
 
         // Auto-select all single-day sheets by default; multi-day stays unchecked
@@ -78,7 +99,7 @@ export default function UploadPage() {
         // Pre-build config for every sheet so user edits don't reset on re-select
         const initial: Record<string, SheetConfig> = {}
         parsedSheets.forEach(s => {
-            initial[s.sheetName] = buildSheetConfig(s)
+            initial[s.sheetName] = buildSheetConfig(s, detectedSppg)
         })
         setConfigs(initial)
 
@@ -200,7 +221,8 @@ export default function UploadPage() {
         if (dates.length === 1) {
             zipBatchName = configs[selectedSheetNames[0]]?.batchName
         } else if (dates.length > 1) {
-            zipBatchName = `Kwitansi SPPG Tambak - ${format(dates[0], 'dd-MM-yyyy')} sd ${format(dates[dates.length - 1], 'dd-MM-yyyy')}`
+            const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
+            zipBatchName = `Kwitansi ${sppg} - ${format(dates[0], 'dd-MM-yyyy')} sd ${format(dates[dates.length - 1], 'dd-MM-yyyy')}`
         }
         await downloadAllPDFs(generatedPDFs, zipBatchName)
     }
@@ -337,7 +359,7 @@ export default function UploadPage() {
                                                                 if (!date) return
                                                                 updateConfig(previewSheet.sheetName, {
                                                                     invoiceDate: date,
-                                                                    batchName: defaultBatchName(date),
+                                                                    batchName: defaultBatchName(date, sppgName, previewSheet.category),
                                                                 })
                                                             }}
                                                             initialFocus

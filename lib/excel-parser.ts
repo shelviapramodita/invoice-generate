@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx'
-import { ExcelRow, ParsedExcelData, InvoiceItemForm, SheetEntry, WorkbookParseResult, SheetType } from '@/types'
+import { ExcelRow, ParsedExcelData, InvoiceItemForm, SheetEntry, WorkbookParseResult, SheetType, SheetCategory } from '@/types'
 import { excelRowSchema, normalizeSupplierName } from './validators'
 import { getSupplierConfig } from '@/data/cv-reference'
+import { normalizeItemName } from './text-normalizer'
 
 interface ParseResult {
     success: boolean
@@ -50,10 +51,19 @@ export function parseSheetName(name: string, fallbackYear?: number): {
     dateRangeStart?: Date
     dateRangeEnd?: Date
     label: string
+    category?: SheetCategory
 } {
+    // Detect category from sheet name BEFORE stripping. "OPS GALON" must be checked
+    // before standalone "OPS" to avoid matching the prefix and leaving "GALON" behind.
+    let category: SheetCategory | undefined
+    const upperRaw = name.toUpperCase()
+    if (/\bOPS\s+GALON\b/.test(upperRaw)) category = 'operasional-galon'
+    else if (/\bOPS\b/.test(upperRaw)) category = 'operasional'
+
     const cleaned = name
         .replace(/\(.*?\)/g, ' ')
-        .replace(/\b(DONE|done|Done|BAHAN\s*BAKU|Copy\s*of)\b/g, ' ')
+        // Strip OPS GALON first, then standalone OPS, plus other noise tokens
+        .replace(/\b(OPS\s+GALON|OPS|DONE|done|Done|BAHAN\s*BAKU|Copy\s*of)\b/gi, ' ')
         .replace(/\s+/g, ' ')
         .trim()
         .toUpperCase()
@@ -85,6 +95,7 @@ export function parseSheetName(name: string, fallbackYear?: number): {
             dateRangeStart: start,
             dateRangeEnd: end,
             label: `${d1} ${MONTH_LABELS[mo1]} – ${d2} ${MONTH_LABELS[mo2]} ${year}`,
+            category,
         }
     }
 
@@ -102,6 +113,7 @@ export function parseSheetName(name: string, fallbackYear?: number): {
             dateRangeStart: start,
             dateRangeEnd: end,
             label: `${d1}–${d2} ${MONTH_LABELS[mo]} ${year}`,
+            category,
         }
     }
 
@@ -116,10 +128,11 @@ export function parseSheetName(name: string, fallbackYear?: number): {
             type: 'single-day',
             detectedDate: date,
             label: `${d} ${MONTH_LABELS[mo]} ${year}`,
+            category,
         }
     }
 
-    return { type: 'unparseable', label: name.trim() || '(no name)' }
+    return { type: 'unparseable', label: name.trim() || '(no name)', category }
 }
 
 // Required columns for invoice data
@@ -500,7 +513,9 @@ function parseWorksheetRows(rawRows: unknown[][]): ParseResult {
 
             groupedData[supplier]!.push({
                 supplier,
-                item_name: row.URAIAN,
+                // Normalize URAIAN here so preview, PDF, and DB all see consistent
+                // formatting (Title Case, "non" → "tidak", expanded units, etc.)
+                item_name: normalizeItemName(row.URAIAN),
                 quantity: row.QTY,
                 unit: row.SATUAN,
                 price: row.HARGA,
@@ -578,6 +593,7 @@ export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResul
                     dateRangeStart: meta.dateRangeStart?.toISOString().split('T')[0],
                     dateRangeEnd: meta.dateRangeEnd?.toISOString().split('T')[0],
                     label: meta.label,
+                    category: meta.category,
                     totalItems: 0,
                     grandTotal: 0,
                     error: 'Sheet kosong',
@@ -600,6 +616,7 @@ export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResul
                     dateRangeStart: meta.dateRangeStart?.toISOString().split('T')[0],
                     dateRangeEnd: meta.dateRangeEnd?.toISOString().split('T')[0],
                     label: meta.label,
+                    category: meta.category,
                     totalItems: 0,
                     grandTotal: 0,
                     error: result.error,
@@ -615,6 +632,7 @@ export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResul
                 dateRangeStart: meta.dateRangeStart?.toISOString().split('T')[0],
                 dateRangeEnd: meta.dateRangeEnd?.toISOString().split('T')[0],
                 label: meta.label,
+                category: meta.category,
                 data: result.data,
                 totalItems: summary.totalItems,
                 grandTotal: summary.grandTotal,

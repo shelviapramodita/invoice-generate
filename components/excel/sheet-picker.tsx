@@ -134,6 +134,10 @@ export function SheetPicker({ sheets, selectedSheetNames, onChange }: SheetPicke
                             {!collapsed && sheetsInGroup.map(sheet => {
                                 const isSelected = selectedSheetNames.includes(sheet.sheetName)
                                 const isMultiDay = sheet.type === 'multi-day'
+                                const categoryLabel =
+                                    sheet.category === 'operasional' ? 'Operasional'
+                                    : sheet.category === 'operasional-galon' ? 'Operasional Galon'
+                                    : null
                                 return (
                                     <label
                                         key={sheet.sheetName}
@@ -146,7 +150,7 @@ export function SheetPicker({ sheets, selectedSheetNames, onChange }: SheetPicke
                                             onCheckedChange={() => toggleSheet(sheet.sheetName)}
                                         />
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="font-medium text-sm">{sheet.label}</span>
                                                 {isMultiDay ? (
                                                     <Badge variant="secondary" className="text-[10px] gap-1 bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
@@ -157,6 +161,11 @@ export function SheetPicker({ sheets, selectedSheetNames, onChange }: SheetPicke
                                                     <Badge variant="secondary" className="text-[10px] gap-1 bg-green-100 text-green-800 hover:bg-green-100">
                                                         <CheckCircle2 className="h-3 w-3" />
                                                         1 hari
+                                                    </Badge>
+                                                )}
+                                                {categoryLabel && (
+                                                    <Badge variant="secondary" className="text-[10px] bg-blue-100 text-blue-800 hover:bg-blue-100">
+                                                        {categoryLabel}
                                                     </Badge>
                                                 )}
                                             </div>
