@@ -29,6 +29,7 @@ const UNITS_LOWERCASE: Record<string, string> = {
     'bks': 'bks',
     'bal': 'bal',
     'iket': 'iket',
+    'ikat': 'ikat',
     'rcng': 'rcng',
     'renceng': 'renceng',
     'pouch': 'pouch',
@@ -36,9 +37,25 @@ const UNITS_LOWERCASE: Record<string, string> = {
     'kaleng': 'kaleng',
     'galon': 'galon',
     'ons': 'ons',
+    'butir': 'butir',
+    'buah': 'buah',
+    'biji': 'biji',
+    'batang': 'batang',
+    'lembar': 'lembar',
+    'helai': 'helai',
+    'ekor': 'ekor',
+    'bungkus': 'bungkus',
+    'botol': 'botol',
+    'dus': 'dus',
+    'karung': 'karung',
+    'lonjor': 'lonjor',
 }
 
 const UNIT_LITER = 'L'
+
+// Regex alternation group of all unit tokens, plus standalone "l" for liter.
+// Used in digit-spacing (step 4) and isi-N descriptor wrap (step 5).
+const UNIT_PATTERN = [...Object.keys(UNITS_LOWERCASE), 'l'].join('|')
 
 // Acronyms that should always be uppercase regardless of context.
 const ACRONYMS_UPPERCASE: Record<string, string> = {
@@ -243,6 +260,11 @@ export function normalizeItemName(raw: string): string {
     let s = raw.trim()
     if (!s) return s
 
+    // 0. Strip "@" symbol entirely. Used as "each/per" marker in lists like
+    //    "1 pack isi @24 pcs" — we drop it because the meaning is already
+    //    conveyed by "isi". Whitespace is normalized in the final cleanup.
+    s = s.replace(/@/g, '')
+
     // 1. Replace "non" with "tidak":
     //    - Standalone: "Bawang Putih Non Kupas" → "Bawang Putih Tidak Kupas"
     //    - Attached typo: "Bawang Merah Nonkupas" → "Bawang Merah tidak kupas"
@@ -271,17 +293,23 @@ export function normalizeItemName(raw: string): string {
 
     // 4. Insert space between number and common attached units:
     //    "650ml" → "650 ml", "500gram" → "500 gram", "2kg" → "2 kg", "1L" → "1 L"
-    s = s.replace(/(\d+(?:[.,]\d+)?)(kg|ml|liter|gram|pcs|btl|krat|pack|bks|bal|iket|sachet|kaleng|galon|pouch|ons)\b/gi, '$1 $2')
+    s = s.replace(new RegExp(`(\\d+(?:[.,]\\d+)?)(${UNIT_PATTERN})\\b`, 'gi'), '$1 $2')
     //    Standalone "L" attached to digit ("2L", but not "abcL")
     s = s.replace(/(\d+(?:[.,]\d+)?)L\b/g, '$1 L')
 
-    // 5. If string has no parentheses, detect a trailing "isi N" descriptor and wrap it.
-    //    Pattern: "<name>" + space + "[<num> <unit>?]? isi <num>" at end of string.
+    // 5. If string has no parentheses, detect a trailing quantity descriptor and
+    //    wrap it. Supports patterns:
+    //      "<num> [<unit>?] isi <num> [<unit>?]"
+    //    Examples that match:
+    //      "Ayam Parting 1 kg isi 10"            → "Ayam Parting (1 kg isi 10)"
+    //      "Saos Tomat 1 pack isi 24 pcs"        → "Saos Tomat (1 pack isi 24 pcs)"
+    //      "Telur 1 krat isi 30 butir"           → "Telur (1 krat isi 30 butir)"
     if (!/[()]/.test(s)) {
-        s = s.replace(
-            /^(.+?)\s+((?:\d+(?:[.,]\d+)?\s*(?:kg|gram|ml|l|liter|pcs|btl)\s+)?isi\s+\d+(?:[.,]\d+)?)\s*$/i,
-            '$1 ($2)'
+        const isiRe = new RegExp(
+            `^(.+?)\\s+(\\d+(?:[.,]\\d+)?\\s*(?:${UNIT_PATTERN})?\\s+isi\\s+\\d+(?:[.,]\\d+)?(?:\\s+(?:${UNIT_PATTERN}))?)\\s*$`,
+            'i'
         )
+        s = s.replace(isiRe, '$1 ($2)')
     }
 
     // 6. Apply final casing (title case outside parens, lowercase inside)
