@@ -54,6 +54,114 @@ const ACRONYMS_UPPERCASE: Record<string, string> = {
     'skm': 'SKM',
 }
 
+// Words after "tidak" that signal a quality-requirement note (NOT part of the
+// item's form/spec). These get stripped along with the "tidak". Distinguishes
+// "Bawang Putih Tidak Kupas" (legit, kupas not in this set) from
+// "Buah Naga, Tidak Bonyok" (noise, bonyok IS in this set).
+const NOISE_TIDAK_WORDS = new Set([
+    'bonyok', 'busuk', 'boleng', 'memar', 'layu', 'basi',
+    'rusak', 'cacat', 'pahit', 'kecut',
+])
+
+// Standalone quality words that on their own indicate a noise note.
+const NOISE_STANDALONE_WORDS = new Set([
+    'bagus', 'matang', 'manis', 'segar', 'baik', 'fresh',
+])
+
+/**
+ * Decide if a single segment (separated by comma, or inside parens) is a noise
+ * note that should be discarded.
+ *   true  → discard (quality requirement, packaging instruction, etc.)
+ *   false → keep (item name part, quantity descriptor, brand, etc.)
+ */
+function isNoiseSegment(segment: string): boolean {
+    const lower = segment.trim().toLowerCase()
+    if (!lower) return true
+
+    // "tidak <word>" — only if <word> is a known quality issue
+    const tidakMatch = lower.match(/^tidak\s+(\w+)/)
+    if (tidakMatch && NOISE_TIDAK_WORDS.has(tidakMatch[1])) return true
+
+    // Packaging instructions: "pakai kresek bening", "pakai plastik"
+    if (/^pakai\s+/.test(lower)) return true
+
+    // Restrictions: "jangan terlalu tua"
+    if (/^jangan\s+/.test(lower)) return true
+
+    // Colloquial descriptors: "yang udah kuning", "yang sudah matang"
+    if (/^yang\s+/.test(lower)) return true
+
+    // Quality modifiers: "terlalu tua"
+    if (/^terlalu\s+/.test(lower)) return true
+
+    // Standalone quality words
+    if (NOISE_STANDALONE_WORDS.has(lower)) return true
+
+    return false
+}
+
+/**
+ * Strip noise notes (quality requirements, packaging instructions) from an
+ * item name. Operates on:
+ *   1. Content inside parentheses — filter noise segments; if all noise, drop the parens.
+ *   2. Top-level comma-separated segments — keep first (main name), drop noise from rest.
+ *   3. Inline "tidak <noise-word>" sequences without separators.
+ *
+ * Examples:
+ *   "Buah Naga 1 kg Isi 2, Tidak Bonyok, Tidak Busuk, Tidak Boleng"
+ *     → "Buah Naga 1 kg Isi 2"
+ *   "Melon (bagus, tidak memar, manis, matang)"
+ *     → "Melon"
+ *   "Sayur Bayam (pakai kresek bening)"
+ *     → "Sayur Bayam"
+ *   "Bawang Putih Tidak Kupas"
+ *     → "Bawang Putih Tidak Kupas"  (kupas is not a noise word)
+ *   "Jeruk manis kuning tidak bonyok tidak busuk 1kg isi 11"
+ *     → "Jeruk manis kuning 1kg isi 11"
+ */
+function stripNoiseNotes(s: string): string {
+    // 1. Filter noise inside parentheses
+    s = s.replace(/\(([^)]*)\)/g, (_match, inner: string) => {
+        const segments = inner.split(',').map(seg => seg.trim())
+        const kept = segments.filter(seg => !isNoiseSegment(seg))
+        if (kept.length === 0) return ' '
+        return `(${kept.join(', ')})`
+    })
+
+    // 2. Filter top-level comma-separated segments (keep first as main name)
+    const parts = s.split(',').map(seg => seg.trim()).filter(p => p.length > 0)
+    if (parts.length > 1) {
+        const kept = [parts[0]]
+        for (let i = 1; i < parts.length; i++) {
+            if (!isNoiseSegment(parts[i])) kept.push(parts[i])
+        }
+        s = kept.join(', ')
+    } else if (parts.length === 1) {
+        s = parts[0]
+    }
+
+    // 3. Strip inline "tidak <noise>" sequences with no separator
+    for (const word of NOISE_TIDAK_WORDS) {
+        s = s.replace(new RegExp(`\\btidak\\s+${word}\\b`, 'gi'), '')
+    }
+
+    // 4. Strip inline "yang ..." descriptors that trail at end-of-string, before
+    //    comma, or before opening paren. Matches "yang X", "yang X Y", "yang X Y Z"
+    //    (up to 3 words after "yang"). Uses [^\s()] instead of \S so it doesn't
+    //    eat parenthesized quantity descriptors like "(1 ikat)".
+    //    Examples:
+    //      "Jeruk Manis Yang Udah Kuning"      → "Jeruk Manis"
+    //      "Pisang Yang Sudah Matang"          → "Pisang"
+    //      "Bayam Yang Bersih (1 ikat)"        → "Bayam (1 ikat)"
+    s = s.replace(/\s+yang\s+[^\s()]+(?:\s+[^\s()]+){0,2}(?=\s*(?:,|\(|$))/gi, '')
+
+    // 5. Cleanup: collapse whitespace and trim trailing punctuation
+    s = s.replace(/\s+/g, ' ').trim()
+    s = s.replace(/[,.;:]+\s*$/, '').trim()
+
+    return s
+}
+
 /**
  * Title-case a single word. Acronyms map to uppercase; other words get
  * leading-cap + rest-lowercase. Unit lowercasing is NOT done here — it's a
@@ -121,8 +229,13 @@ export function normalizeItemName(raw: string): string {
     let s = raw.trim()
     if (!s) return s
 
-    // 1. Replace standalone "non" with "tidak" (case-insensitive)
+    // 1. Replace standalone "non" with "tidak" (case-insensitive).
+    //    Done first so any "non bonyok" gets normalized to "tidak bonyok" before
+    //    the noise-stripping step below picks it up.
     s = s.replace(/\bnon\b/gi, 'tidak')
+
+    // 1b. Strip noise notes (quality requirements, packaging instructions).
+    s = stripNoiseNotes(s)
 
     // 2. Expand "Gr" / "500gr" → "Gram" / "500 gram"
     //    (handle attached form first to also insert the space)
