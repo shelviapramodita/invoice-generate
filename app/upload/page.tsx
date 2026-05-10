@@ -92,9 +92,9 @@ export default function UploadPage() {
         setSppgName(detectedSppg)
         setSheets(parsedSheets)
 
-        // Auto-select all single-day sheets by default; multi-day stays unchecked
-        const autoSelect = parsedSheets.filter(s => s.type === 'single-day').map(s => s.sheetName)
-        setSelectedSheetNames(autoSelect)
+        // Start with NO sheets selected. User explicitly picks the days they want
+        // — saves them from having to unselect dozens of dates they don't need.
+        setSelectedSheetNames([])
 
         // Pre-build config for every sheet so user edits don't reset on re-select
         const initial: Record<string, SheetConfig> = {}
@@ -103,8 +103,25 @@ export default function UploadPage() {
         })
         setConfigs(initial)
 
-        // Open preview for first selected sheet
-        setPreviewSheetName(autoSelect[0] || parsedSheets[0]?.sheetName || null)
+        // No preview until user picks a sheet
+        setPreviewSheetName(null)
+    }
+
+    /**
+     * Wrap setSelectedSheetNames so the preview tab auto-follows the selection:
+     *   - If selection becomes empty → previewSheetName=null (config card hides).
+     *   - If current preview isn't in new selection → switch to first selected.
+     *   - Otherwise leave preview alone.
+     * This way the user never has to manually pick a "preview tab" — picking a
+     * checkbox is enough.
+     */
+    const handleSelectionChange = (newSelection: string[]) => {
+        setSelectedSheetNames(newSelection)
+        if (newSelection.length === 0) {
+            setPreviewSheetName(null)
+        } else if (!previewSheetName || !newSelection.includes(previewSheetName)) {
+            setPreviewSheetName(newSelection[0])
+        }
     }
 
     const updateConfig = (sheetName: string, patch: Partial<SheetConfig>) => {
@@ -290,7 +307,7 @@ export default function UploadPage() {
                                 <SheetPicker
                                     sheets={sheets}
                                     selectedSheetNames={selectedSheetNames}
-                                    onChange={setSelectedSheetNames}
+                                    onChange={handleSelectionChange}
                                 />
                             </CardContent>
                         </Card>
