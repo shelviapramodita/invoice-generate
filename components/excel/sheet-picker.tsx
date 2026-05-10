@@ -108,8 +108,9 @@ export function SheetPicker({ sheets, selectedSheetNames, onChange }: SheetPicke
                     const groupSelectedCount = sheetsInGroup.filter(s => selectedSheetNames.includes(s.sheetName)).length
                     return (
                         <div key={groupName}>
-                            {/* Group header */}
-                            <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 sticky top-0 z-10">
+                            {/* Group header — sticky, solid bg + border so list items
+                                don't show through when scrolling. */}
+                            <div className="flex items-center gap-2 px-3 py-2 bg-muted sticky top-0 z-10 border-b border-border">
                                 <button
                                     type="button"
                                     onClick={() => toggleCollapse(groupName)}
