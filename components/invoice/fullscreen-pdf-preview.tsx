@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
-import { Download, X, FileArchive, FilePlus2 } from 'lucide-react'
+import { Download, X, FileArchive, FilePlus2, ChevronDown, ChevronRight, Filter } from 'lucide-react'
 import { GeneratedPDF } from '@/lib/pdf/pdf-generator'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -10,7 +10,6 @@ import {
     DialogTitle,
     DialogDescription
 } from '@/components/ui/dialog'
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 
 // Helper to sanitize filename (remove/replace invalid characters)
 function sanitizeFilename(name: string): string {
@@ -19,6 +18,20 @@ function sanitizeFilename(name: string): string {
         .replace(/\s+/g, ' ')             // Normalize spaces
         .trim()
 }
+
+// Convert "28-04-2026" → "28 Apr 2026" for nicer group headers.
+const ID_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+function formatGroupLabel(label: string): string {
+    const m = label.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+    if (!m) return label
+    const day = parseInt(m[1], 10)
+    const monthIdx = parseInt(m[2], 10) - 1
+    const year = m[3]
+    if (monthIdx < 0 || monthIdx > 11) return label
+    return `${day} ${ID_MONTHS[monthIdx]} ${year}`
+}
+
+const NO_DATE_KEY = '__no_date__'
 
 interface FullScreenPDFPreviewProps {
     open: boolean
@@ -38,6 +51,52 @@ export function FullScreenPDFPreview({
     const [selectedPdf, setSelectedPdf] = useState<GeneratedPDF | null>(null)
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
     const [downloading, setDownloading] = useState(false)
+    // Filter: 'all' shows every group; otherwise the groupLabel of the only visible group
+    const [filterDate, setFilterDate] = useState<string>('all')
+    // Per-group collapsed state. Default: all expanded.
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+
+    // Group PDFs by their groupLabel (the per-day label set in upload page).
+    // PDFs without groupLabel fall under NO_DATE_KEY and render without a header.
+    const groups = useMemo(() => {
+        const map = new Map<string, GeneratedPDF[]>()
+        pdfs.forEach(pdf => {
+            const key = pdf.groupLabel || NO_DATE_KEY
+            if (!map.has(key)) map.set(key, [])
+            map.get(key)!.push(pdf)
+        })
+        // Sort groups chronologically by date string (DD-MM-YYYY → YYYY-MM-DD for compare)
+        return Array.from(map.entries()).sort(([a], [b]) => {
+            if (a === NO_DATE_KEY) return 1
+            if (b === NO_DATE_KEY) return -1
+            const ka = a.split('-').reverse().join('')
+            const kb = b.split('-').reverse().join('')
+            return ka.localeCompare(kb)
+        })
+    }, [pdfs])
+
+    // Whether to show the filter UI at all (only useful when >1 day)
+    const hasMultipleGroups = groups.length > 1 && !groups.some(([k]) => k === NO_DATE_KEY)
+
+    // Apply the filter
+    const visibleGroups = useMemo(() => {
+        if (filterDate === 'all') return groups
+        return groups.filter(([key]) => key === filterDate)
+    }, [groups, filterDate])
+
+    const visibleCount = useMemo(() =>
+        visibleGroups.reduce((sum, [, list]) => sum + list.length, 0),
+        [visibleGroups]
+    )
+
+    const toggleGroup = (key: string) => {
+        setCollapsedGroups(prev => {
+            const next = new Set(prev)
+            if (next.has(key)) next.delete(key)
+            else next.add(key)
+            return next
+        })
+    }
 
     // Update preview URL when selected PDF changes
     const handleSelectPdf = (pdf: GeneratedPDF) => {
@@ -167,38 +226,85 @@ export function FullScreenPDFPreview({
                     <div className="flex-1 flex gap-4 p-4 min-h-0 overflow-hidden">
                         {/* Sidebar */}
                         <div className="w-80 flex-shrink-0 border rounded-lg p-4 overflow-y-auto bg-muted/20">
-                            <p className="text-sm font-semibold mb-3 text-foreground">Daftar Invoice:</p>
-                            <div className="space-y-2">
-                                {pdfs.map((pdf, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => handleSelectPdf(pdf)}
-                                        className={cn(
-                                            "w-full text-left p-3 rounded-lg border transition-all",
-                                            selectedPdf === pdf
-                                                ? "bg-primary text-primary-foreground border-primary shadow-md"
-                                                : "hover:bg-muted hover:border-primary/20 hover:shadow-sm border-border"
-                                        )}
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-sm font-semibold text-foreground">Daftar Invoice</p>
+                                <span className="text-xs text-muted-foreground">
+                                    {visibleCount}{filterDate !== 'all' ? `/${pdfs.length}` : ''} file
+                                </span>
+                            </div>
+
+                            {/* Filter dropdown — only when multiple days */}
+                            {hasMultipleGroups && (
+                                <div className="mb-3">
+                                    <label className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                                        <Filter className="h-3 w-3" />
+                                        Filter tanggal
+                                    </label>
+                                    <select
+                                        value={filterDate}
+                                        onChange={(e) => setFilterDate(e.target.value)}
+                                        className="w-full text-sm border rounded-md px-2 py-1.5 bg-background hover:border-primary/50 transition-colors cursor-pointer"
                                     >
-                                        <div className="text-sm font-bold truncate">
-                                            {pdf.supplier}
+                                        <option value="all">Semua tanggal ({pdfs.length})</option>
+                                        {groups.map(([key, list]) => (
+                                            <option key={key} value={key}>
+                                                {formatGroupLabel(key)} ({list.length})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Grouped list */}
+                            <div className="space-y-3">
+                                {visibleGroups.map(([groupKey, list]) => {
+                                    const collapsed = collapsedGroups.has(groupKey)
+                                    const isNoDate = groupKey === NO_DATE_KEY
+                                    return (
+                                        <div key={groupKey}>
+                                            {/* Group header — clickable to collapse, hidden if no date */}
+                                            {!isNoDate && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleGroup(groupKey)}
+                                                    className="w-full flex items-center gap-1.5 px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors mb-1.5"
+                                                >
+                                                    {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                                    <span>{formatGroupLabel(groupKey)}</span>
+                                                    <span className="ml-auto opacity-70">{list.length}</span>
+                                                </button>
+                                            )}
+
+                                            {/* PDFs in this group */}
+                                            {(!collapsed || isNoDate) && (
+                                                <div className="space-y-2">
+                                                    {list.map((pdf, idx) => (
+                                                        <button
+                                                            key={`${groupKey}-${idx}`}
+                                                            onClick={() => handleSelectPdf(pdf)}
+                                                            className={cn(
+                                                                "w-full text-left p-3 rounded-lg border transition-all",
+                                                                selectedPdf === pdf
+                                                                    ? "bg-primary text-primary-foreground border-primary shadow-md"
+                                                                    : "hover:bg-muted hover:border-primary/20 hover:shadow-sm border-border"
+                                                            )}
+                                                        >
+                                                            <div className="text-sm font-bold truncate">
+                                                                {pdf.supplier}
+                                                            </div>
+                                                            <div className={cn(
+                                                                "text-xs mt-1 font-mono",
+                                                                selectedPdf === pdf ? "opacity-90" : "opacity-60"
+                                                            )}>
+                                                                {pdf.invoiceNumber}
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className={cn(
-                                            "text-xs mt-1 font-mono",
-                                            selectedPdf === pdf ? "opacity-90" : "opacity-60"
-                                        )}>
-                                            {pdf.invoiceNumber}
-                                        </div>
-                                        {pdf.groupLabel && (
-                                            <div className={cn(
-                                                "text-[11px] mt-0.5",
-                                                selectedPdf === pdf ? "opacity-80" : "opacity-50"
-                                            )}>
-                                                {pdf.groupLabel}
-                                            </div>
-                                        )}
-                                    </button>
-                                ))}
+                                    )
+                                })}
                             </div>
                         </div>
 
