@@ -288,10 +288,10 @@ export function FullScreenPDFPreview({
                                         onChange={(e) => setFilterDate(e.target.value)}
                                         className="w-full text-sm border rounded-md px-2 py-1.5 bg-background hover:border-primary/50 transition-colors cursor-pointer"
                                     >
-                                        <option value="all">Semua tanggal ({pdfs.length})</option>
-                                        {groups.map(([key, list]) => (
+                                        <option value="all">Semua tanggal</option>
+                                        {groups.map(([key]) => (
                                             <option key={key} value={key}>
-                                                {formatGroupLabel(key)} ({list.length})
+                                                {formatGroupLabel(key)}
                                             </option>
                                         ))}
                                     </select>
