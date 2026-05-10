@@ -54,19 +54,30 @@ const ACRONYMS_UPPERCASE: Record<string, string> = {
     'skm': 'SKM',
 }
 
-// Words after "tidak" that signal a quality-requirement note (NOT part of the
-// item's form/spec). These get stripped along with the "tidak". Distinguishes
-// "Bawang Putih Tidak Kupas" (legit, kupas not in this set) from
-// "Buah Naga, Tidak Bonyok" (noise, bonyok IS in this set).
-const NOISE_TIDAK_WORDS = new Set([
-    'bonyok', 'busuk', 'boleng', 'memar', 'layu', 'basi',
-    'rusak', 'cacat', 'pahit', 'kecut',
+// Words that mark a LEGITIMATE "tidak X" form descriptor (preserved as part of
+// the item name). Anything else after "tidak" is treated as a noise quality
+// requirement and stripped.
+//
+// Examples:
+//   "Bawang Putih Tidak Kupas" → kept (kupas IS in safelist — "not peeled"
+//                                    is a real product form)
+//   "Wortel Tidak Tua"         → stripped (tua not in safelist — quality note)
+//   "Buah Naga, Tidak Bonyok"  → stripped (bonyok not in safelist)
+const LEGIT_TIDAK_WORDS = new Set([
+    'kupas', 'dikupas', 'kupasan',
 ])
 
 // Standalone quality words that on their own indicate a noise note.
 const NOISE_STANDALONE_WORDS = new Set([
     'bagus', 'matang', 'manis', 'segar', 'baik', 'fresh',
 ])
+
+// Vocabulary normalization: colloquial Indonesian → formal Indonesian.
+// Applied as whole-word replacements, case-insensitive.
+const VOCAB_NORMALIZE: Array<[RegExp, string]> = [
+    [/\bcabe\b/gi, 'cabai'],
+    [/\bijo\b/gi, 'hijau'],
+]
 
 /**
  * Decide if a single segment (separated by comma, or inside parens) is a noise
@@ -78,9 +89,10 @@ function isNoiseSegment(segment: string): boolean {
     const lower = segment.trim().toLowerCase()
     if (!lower) return true
 
-    // "tidak <word>" — only if <word> is a known quality issue
+    // "tidak <word>" — noise UNLESS <word> is in the legit safelist
+    // (e.g. "tidak kupas" stays, "tidak tua/bonyok/busuk/..." dropped)
     const tidakMatch = lower.match(/^tidak\s+(\w+)/)
-    if (tidakMatch && NOISE_TIDAK_WORDS.has(tidakMatch[1])) return true
+    if (tidakMatch && !LEGIT_TIDAK_WORDS.has(tidakMatch[1])) return true
 
     // Packaging instructions: "pakai kresek bening", "pakai plastik"
     if (/^pakai\s+/.test(lower)) return true
@@ -140,10 +152,12 @@ function stripNoiseNotes(s: string): string {
         s = parts[0]
     }
 
-    // 3. Strip inline "tidak <noise>" sequences with no separator
-    for (const word of NOISE_TIDAK_WORDS) {
-        s = s.replace(new RegExp(`\\btidak\\s+${word}\\b`, 'gi'), '')
-    }
+    // 3. Strip inline "tidak <word>" sequences UNLESS the word is in the
+    //    legit safelist. So "Wortel Tidak Tua" → "Wortel" (tua dropped),
+    //    but "Bawang Putih Tidak Kupas" stays as-is.
+    s = s.replace(/\btidak\s+(\w+)\b/gi, (match, word: string) => {
+        return LEGIT_TIDAK_WORDS.has(word.toLowerCase()) ? match : ''
+    })
 
     // 4. Strip inline "yang ..." descriptors that trail at end-of-string, before
     //    comma, or before opening paren. Matches "yang X", "yang X Y", "yang X Y Z"
@@ -229,12 +243,21 @@ export function normalizeItemName(raw: string): string {
     let s = raw.trim()
     if (!s) return s
 
-    // 1. Replace standalone "non" with "tidak" (case-insensitive).
+    // 1. Replace "non" with "tidak":
+    //    - Standalone: "Bawang Putih Non Kupas" → "Bawang Putih Tidak Kupas"
+    //    - Attached typo: "Bawang Merah Nonkupas" → "Bawang Merah tidak kupas"
     //    Done first so any "non bonyok" gets normalized to "tidak bonyok" before
     //    the noise-stripping step below picks it up.
+    s = s.replace(/\bnon([a-z]+)\b/gi, 'tidak $1')
     s = s.replace(/\bnon\b/gi, 'tidak')
 
-    // 1b. Strip noise notes (quality requirements, packaging instructions).
+    // 1b. Vocabulary normalization (colloquial → formal Indonesian).
+    //    "cabe" → "cabai", "ijo" → "hijau", etc.
+    for (const [pattern, replacement] of VOCAB_NORMALIZE) {
+        s = s.replace(pattern, replacement)
+    }
+
+    // 1c. Strip noise notes (quality requirements, packaging instructions).
     s = stripNoiseNotes(s)
 
     // 2. Expand "Gr" / "500gr" → "Gram" / "500 gram"
