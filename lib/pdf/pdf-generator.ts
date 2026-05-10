@@ -27,9 +27,14 @@ export interface GeneratedPDF {
     supplier: string
     blob: Blob
     invoiceNumber: string
-    // Optional label identifying which day/batch this PDF belongs to (e.g. "21 Jan 2026").
+    // Optional label identifying which day/batch this PDF belongs to (e.g. "21-01-2026").
     // Used by preview sidebar and ZIP folder grouping when generating across multiple days.
     groupLabel?: string
+    // The Nama Batch the user configured for this PDF's day (e.g.
+    // "Kwitansi SPPG Tambak - 28/04/2026"). Used as folder name in ZIPs and
+    // filename prefix for single-PDF downloads so the user gets neat,
+    // consistent file naming that matches what they typed in the UI.
+    batchName?: string
 }
 
 /**
@@ -191,19 +196,20 @@ export async function downloadAsZip(pdfs: GeneratedPDF[], filename: string) {
         const JSZip = (await import('jszip')).default
         const zip = new JSZip()
 
-        // If any PDF has a groupLabel, organize into folders by group to prevent
-        // filename collisions across days that share the same invoice number.
-        const hasGroups = pdfs.some(p => p.groupLabel)
+        // If any PDF has a batchName/groupLabel, organize into folders so the ZIP
+        // structure mirrors what the user configured. Prefer batchName (matches
+        // "Nama Batch" the user typed) over generic groupLabel date.
+        const hasGroups = pdfs.some(p => p.batchName || p.groupLabel)
 
         pdfs.forEach((pdf) => {
-            const safeSupplier = pdf.supplier.replace(/[\/\\:*?"<>|]/g, '-')
-            const safeInvoice = pdf.invoiceNumber.replace(/[\/\\:*?"<>|]/g, '-')
-            const baseName = `Invoice-${safeSupplier}-${safeInvoice}.pdf`
-            if (hasGroups && pdf.groupLabel) {
-                const safeGroup = pdf.groupLabel.replace(/[\/\\:*?"<>|]/g, '-').trim()
-                zip.file(`${safeGroup}/${baseName}`, pdf.blob)
+            const safeSupplier = sanitizeFilename(pdf.supplier)
+            const safeInvoice = sanitizeFilename(pdf.invoiceNumber)
+            const baseName = `${safeSupplier}-${safeInvoice}.pdf`
+            if (hasGroups && (pdf.batchName || pdf.groupLabel)) {
+                const folder = sanitizeFilename(pdf.batchName || pdf.groupLabel || '')
+                zip.file(`${folder}/${baseName}`, pdf.blob)
             } else {
-                zip.file(baseName, pdf.blob)
+                zip.file(`Invoice-${baseName}`, pdf.blob)
             }
         })
 
@@ -228,21 +234,25 @@ export async function downloadAsZip(pdfs: GeneratedPDF[], filename: string) {
 export async function downloadAllPDFs(pdfs: GeneratedPDF[], batchName?: string) {
     if (pdfs.length === 0) return
 
-    const safeBatchName = batchName ? sanitizeFilename(batchName) : null
-
     if (pdfs.length === 1) {
-        // Download single file
+        // Single file — prefer the PDF's own batchName (set when generated) over
+        // the function arg, so each PDF gets the exact "Nama Batch" the user
+        // configured for its day.
         const pdf = pdfs[0]
-        const filename = safeBatchName
-            ? `${safeBatchName}-${pdf.supplier}-${pdf.invoiceNumber}.pdf`
+        const effectiveBatch = pdf.batchName ?? batchName
+        const safe = effectiveBatch ? sanitizeFilename(effectiveBatch) : null
+        const filename = safe
+            ? `${safe}-${pdf.supplier}-${pdf.invoiceNumber}.pdf`
             : `Invoice-${pdf.supplier}-${pdf.invoiceNumber}.pdf`
-        downloadPDF(pdfs[0].blob, filename)
+        downloadPDF(pdf.blob, filename)
     } else {
-        // Download as ZIP
+        // ZIP filename uses the passed batchName (which represents the *download
+        // session* — single-date or multi-date range — not per-PDF). Inner
+        // file/folder structure inside the ZIP uses each PDF's own batchName.
+        const safeBatchName = batchName ? sanitizeFilename(batchName) : null
         const zipFilename = safeBatchName
-            ? `Invoices-${safeBatchName}.zip`
+            ? `${safeBatchName}.zip`
             : `Invoices-${format(new Date(), 'yyyy-MM-dd')}.zip`
-
         await downloadAsZip(pdfs, zipFilename)
     }
 }

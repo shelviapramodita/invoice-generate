@@ -153,7 +153,10 @@ export function FullScreenPDFPreview({
         setDownloading(true)
         try {
             const { downloadPDF } = await import('@/lib/pdf/pdf-generator')
-            const safeBatchName = batchName ? sanitizeFilename(batchName) : null
+            // Prefer the PDF's own batchName (per-day "Nama Batch" user configured)
+            // over the generic prop batchName.
+            const effectiveBatch = selectedPdf.batchName ?? batchName
+            const safeBatchName = effectiveBatch ? sanitizeFilename(effectiveBatch) : null
             const filename = safeBatchName
                 ? `${safeBatchName}-${selectedPdf.supplier}-${selectedPdf.invoiceNumber}.pdf`
                 : `Invoice-${selectedPdf.supplier}-${selectedPdf.invoiceNumber}.pdf`
@@ -174,11 +177,33 @@ export function FullScreenPDFPreview({
         setDownloading(true)
         try {
             const { mergePDFs } = await import('@/lib/pdf/pdf-generator')
-            // Filename includes the filtered date when filter is active so
-            // the user can tell which day's merged file is which.
-            const baseLabel = batchName ? sanitizeFilename(batchName) : 'All-Invoices'
-            const dateSuffix = filterDate !== 'all' ? `-${filterDate}` : ''
-            const filename = `${baseLabel}${dateSuffix}-Merged.pdf`
+
+            // Derive the merged filename from per-PDF batchNames so it follows
+            // the "Nama Batch" the user configured. Three cases:
+            //   1 unique batch → use it directly: "<Batch>-Merged.pdf"
+            //   N unique batches → range: "<Batch1> sd <BatchN>-Merged.pdf"
+            //                       (or fall back to date range if names diverge)
+            //   no per-PDF batchName → fall back to legacy `batchName` prop
+            const uniqueBatches = Array.from(
+                new Set(effectivePdfs.map(p => p.batchName).filter((b): b is string => !!b))
+            )
+            let baseLabel: string
+            if (uniqueBatches.length === 1) {
+                baseLabel = sanitizeFilename(uniqueBatches[0])
+            } else if (uniqueBatches.length > 1) {
+                // Multiple batches — derive a date-range name.
+                const sortedDates = Array.from(
+                    new Set(effectivePdfs.map(p => p.groupLabel).filter((g): g is string => !!g))
+                ).sort((a, b) => a.split('-').reverse().join('').localeCompare(b.split('-').reverse().join('')))
+                if (sortedDates.length >= 2) {
+                    baseLabel = sanitizeFilename(`Kwitansi - ${sortedDates[0]} sd ${sortedDates[sortedDates.length - 1]}`)
+                } else {
+                    baseLabel = sanitizeFilename(uniqueBatches.join(' & '))
+                }
+            } else {
+                baseLabel = batchName ? sanitizeFilename(batchName) : 'All-Invoices'
+            }
+            const filename = `${baseLabel}-Merged.pdf`
             console.log('Merged filename:', filename)
             await mergePDFs(effectivePdfs, filename)
             console.log('Merge complete')

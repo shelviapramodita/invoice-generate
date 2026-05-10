@@ -42,6 +42,7 @@ interface GeneratedPDFEntry {
     blob: Blob
     sheetName: string
     groupLabel?: string
+    batchName?: string
 }
 
 /**
@@ -201,6 +202,11 @@ export default function UploadPage() {
                         // groupLabel makes the preview sidebar + ZIP folder show the day this PDF belongs to
                         // when the user generated multiple days at once.
                         groupLabel: format(cfg.invoiceDate, 'dd-MM-yyyy'),
+                        // batchName is what the user typed in "Nama Batch". It flows through to:
+                        //   - ZIP folder name (so ZIP structure mirrors what user sees in UI)
+                        //   - Single PDF download filename prefix
+                        //   - Merged PDF filename prefix
+                        batchName: cfg.batchName,
                     })
                 })
 
