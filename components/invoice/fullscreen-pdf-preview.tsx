@@ -37,7 +37,12 @@ interface FullScreenPDFPreviewProps {
     open: boolean
     onClose: () => void
     pdfs: GeneratedPDF[]
-    onDownload: () => void
+    /**
+     * Called when user clicks "Download ZIP". Receives the filtered list of PDFs
+     * to download — when filter is "Semua tanggal", this is all pdfs; otherwise
+     * only the pdfs in the currently-filtered date.
+     */
+    onDownload: (filteredPdfs: GeneratedPDF[]) => void
     batchName?: string
 }
 
@@ -84,10 +89,20 @@ export function FullScreenPDFPreview({
         return groups.filter(([key]) => key === filterDate)
     }, [groups, filterDate])
 
-    const visibleCount = useMemo(() =>
-        visibleGroups.reduce((sum, [, list]) => sum + list.length, 0),
+    // Flat list of PDFs that are currently visible (respects filterDate).
+    // Used as the source for "Gabung Jadi 1 PDF" and "Download ZIP" so the
+    // download only includes invoices for the filtered date.
+    const effectivePdfs = useMemo(() =>
+        visibleGroups.flatMap(([, list]) => list),
         [visibleGroups]
     )
+
+    const visibleCount = effectivePdfs.length
+
+    // Pretty label for the filtered date, used in toasts and download filenames.
+    const filterLabel = filterDate === 'all'
+        ? 'Semua tanggal'
+        : formatGroupLabel(filterDate)
 
     const toggleGroup = (key: string) => {
         setCollapsedGroups(prev => {
@@ -154,19 +169,20 @@ export function FullScreenPDFPreview({
     }
 
     const handleDownloadMerged = async () => {
-        console.log('Merging PDFs:', pdfs.length, 'files')
+        if (effectivePdfs.length === 0) return
+        console.log('Merging PDFs:', effectivePdfs.length, 'files for filter:', filterDate)
         setDownloading(true)
         try {
             const { mergePDFs } = await import('@/lib/pdf/pdf-generator')
-            const safeBatchName = batchName ? sanitizeFilename(batchName) : null
-            const filename = safeBatchName
-                ? `${safeBatchName}-All-Invoices-Merged.pdf`
-                : `All-Invoices-Merged.pdf`
+            // Filename includes the filtered date when filter is active so
+            // the user can tell which day's merged file is which.
+            const baseLabel = batchName ? sanitizeFilename(batchName) : 'All-Invoices'
+            const dateSuffix = filterDate !== 'all' ? `-${filterDate}` : ''
+            const filename = `${baseLabel}${dateSuffix}-Merged.pdf`
             console.log('Merged filename:', filename)
-            await mergePDFs(pdfs, filename)
+            await mergePDFs(effectivePdfs, filename)
             console.log('Merge complete')
-            toast.success('Download PDF Gabungan Berhasil!')
-            // Keep dialog open
+            toast.success(`Download PDF Gabungan Berhasil! (${effectivePdfs.length} invoice)`)
         } catch (error) {
             console.error('Error merging PDFs:', error)
             toast.error('Gagal menggabungkan PDF: ' + (error as Error).message)
@@ -176,11 +192,13 @@ export function FullScreenPDFPreview({
     }
 
     const handleDownloadAll = () => {
-        console.log('Downloading all PDFs as ZIP')
+        if (effectivePdfs.length === 0) return
+        console.log('Downloading PDFs as ZIP — filter:', filterDate, 'count:', effectivePdfs.length)
         try {
-            onDownload()
-            toast.success('Download ZIP Berhasil!')
-            // Keep dialog open
+            // Pass the filtered list so the upload-page handler can name the ZIP
+            // and limit contents to just the filtered date.
+            onDownload(effectivePdfs)
+            toast.success(`Download ZIP Berhasil! (${effectivePdfs.length} file)`)
         } catch (error) {
             console.error('Error downloading ZIP:', error)
             toast.error('Gagal mendownload ZIP: ' + (error as Error).message)
@@ -338,8 +356,10 @@ export function FullScreenPDFPreview({
                                         <span className="font-semibold text-foreground">Batch: {batchName}</span>
                                     )}
                                     {batchName && <span className="mx-2 text-muted-foreground">•</span>}
-                                    <span className="font-bold text-foreground">{pdfs.length} invoice</span>
-                                    <span className="text-muted-foreground ml-1">siap di-download</span>
+                                    <span className="font-bold text-foreground">{visibleCount} invoice</span>
+                                    <span className="text-muted-foreground ml-1">
+                                        {filterDate === 'all' ? 'siap di-download' : `dari ${filterLabel}`}
+                                    </span>
                                 </div>
                                 <Button variant="outline" onClick={handleClose} disabled={downloading}>
                                     <X className="mr-2 h-4 w-4" />
@@ -350,13 +370,19 @@ export function FullScreenPDFPreview({
 
                         {/* Download Options */}
                         <div className="px-6 pb-4 pt-4">
-                            <p className="text-xs font-medium text-muted-foreground mb-3">Pilih opsi download:</p>
+                            <p className="text-xs font-medium text-muted-foreground mb-3">
+                                Pilih opsi download:
+                                {filterDate !== 'all' && (
+                                    <span className="ml-1 text-primary font-semibold">
+                                        (filter: {filterLabel})
+                                    </span>
+                                )}
+                            </p>
                             <div className="grid grid-cols-3 gap-3">
                                 <Button
                                     variant="outline"
                                     onClick={(e) => {
                                         e.preventDefault()
-                                        console.log('Action: Download Current')
                                         handleDownloadCurrent()
                                     }}
                                     disabled={!selectedPdf || downloading}
@@ -370,28 +396,26 @@ export function FullScreenPDFPreview({
                                     variant="default"
                                     onClick={(e) => {
                                         e.preventDefault()
-                                        console.log('Action: Merge')
                                         handleDownloadMerged()
                                     }}
-                                    disabled={downloading}
+                                    disabled={downloading || effectivePdfs.length === 0}
                                     className="w-full"
                                 >
                                     <FilePlus2 className="mr-2 h-4 w-4" />
-                                    {downloading ? 'Merging...' : 'Gabung Jadi 1 PDF'}
+                                    {downloading ? 'Merging...' : `Gabung Jadi 1 PDF (${effectivePdfs.length})`}
                                 </Button>
 
                                 <Button
                                     variant="default"
                                     onClick={(e) => {
                                         e.preventDefault()
-                                        console.log('Action: ZIP')
                                         handleDownloadAll()
                                     }}
-                                    disabled={downloading}
+                                    disabled={downloading || effectivePdfs.length === 0}
                                     className="w-full"
                                 >
                                     <FileArchive className="mr-2 h-4 w-4" />
-                                    Download ZIP ({pdfs.length} file)
+                                    Download ZIP ({effectivePdfs.length} file)
                                 </Button>
                             </div>
                         </div>

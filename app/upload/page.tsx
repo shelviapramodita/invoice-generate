@@ -16,6 +16,7 @@ import { FullScreenPDFPreview } from '@/components/invoice/fullscreen-pdf-previe
 import { CustomerNameInput } from '@/components/invoice/customer-name-input'
 import { SheetEntry, SheetCategory } from '@/types'
 import { extractSppgNameFromFilename } from '@/lib/text-normalizer'
+import type { GeneratedPDF } from '@/lib/pdf/pdf-generator'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
@@ -227,21 +228,39 @@ export default function UploadPage() {
         setGeneratedPDFs([])
     }
 
-    const handleDownloadPDFs = async () => {
+    /**
+     * Called from the preview modal's "Download ZIP" button. The preview passes
+     * the filtered list of PDFs (which respects the date-filter dropdown), so
+     * this handler downloads just that subset and names the ZIP based on the
+     * actual dates in the filtered list — not the full selection.
+     */
+    const handleDownloadPDFs = async (filteredPdfs: GeneratedPDF[]) => {
+        if (!filteredPdfs || filteredPdfs.length === 0) return
         const { downloadAllPDFs } = await import('@/lib/pdf/pdf-generator')
-        // For multi-day batches, name the ZIP after the date range
-        const dates = selectedSheetNames
-            .map(n => configs[n]?.invoiceDate)
-            .filter((d): d is Date => !!d)
-            .sort((a, b) => a.getTime() - b.getTime())
+
+        // Derive the date range from the actual PDFs being downloaded.
+        // groupLabel is "DD-MM-YYYY"; sort lex after reversing to YYYY-MM-DD.
+        const groupLabels = Array.from(
+            new Set(filteredPdfs.map(p => p.groupLabel).filter((g): g is string => !!g))
+        ).sort((a, b) => a.split('-').reverse().join('').localeCompare(b.split('-').reverse().join('')))
+
+        const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
         let zipBatchName: string | undefined
-        if (dates.length === 1) {
+        if (groupLabels.length === 1) {
+            // Single date — find the sheet config whose date matches this groupLabel
+            // so we can reuse its batchName (which already has Operasional/Galon prefix when applicable).
+            const target = groupLabels[0]
+            const matched = Object.values(configs).find(c => format(c.invoiceDate, 'dd-MM-yyyy') === target)
+            zipBatchName = matched?.batchName ?? `Kwitansi ${sppg} - ${target}`
+        } else if (groupLabels.length > 1) {
+            // Date range
+            zipBatchName = `Kwitansi ${sppg} - ${groupLabels[0]} sd ${groupLabels[groupLabels.length - 1]}`
+        } else {
+            // No groupLabels (shouldn't happen in normal flow) — fallback
             zipBatchName = configs[selectedSheetNames[0]]?.batchName
-        } else if (dates.length > 1) {
-            const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
-            zipBatchName = `Kwitansi ${sppg} - ${format(dates[0], 'dd-MM-yyyy')} sd ${format(dates[dates.length - 1], 'dd-MM-yyyy')}`
         }
-        await downloadAllPDFs(generatedPDFs, zipBatchName)
+
+        await downloadAllPDFs(filteredPdfs, zipBatchName)
     }
 
     const base64ToBlob = (base64: string, type: string): Blob => {
