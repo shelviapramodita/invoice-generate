@@ -38,6 +38,7 @@ interface InvoiceItem {
     price: number
     total: number
     pdf_file_path: string
+    customer_name?: string | null
 }
 
 interface InvoiceDetail {
@@ -100,6 +101,9 @@ export function InvoiceDetailView({
     const [editedInvoiceDate, setEditedInvoiceDate] = useState('')
     const [deletedItemIds, setDeletedItemIds] = useState<string[]>([])
     const [activeSupplierTab, setActiveSupplierTab] = useState<string>('')
+    // Per-supplier customer name (Tagihan Kepada). One value per supplier
+    // since all items of a supplier share the same customer.
+    const [editedCustomerNames, setEditedCustomerNames] = useState<Record<string, string>>({})
 
     // Dialog for adding new supplier
     const [showAddSupplier, setShowAddSupplier] = useState(false)
@@ -208,6 +212,14 @@ export function InvoiceDetailView({
             setEditedInvoiceDate(invoice.invoice_date.split('T')[0])
             setDeletedItemIds([])
             setShowDownloadOptions(false)
+            // Seed editedCustomerNames from existing items (one entry per supplier)
+            const customerMap: Record<string, string> = {}
+            invoice.items.forEach(item => {
+                if (!(item.supplier in customerMap)) {
+                    customerMap[item.supplier] = item.customer_name || ''
+                }
+            })
+            setEditedCustomerNames(customerMap)
             setIsEditing(true)
         }
     }
@@ -216,6 +228,12 @@ export function InvoiceDetailView({
         setIsEditing(false)
         setEditedItems([])
         setDeletedItemIds([])
+        setEditedCustomerNames({})
+    }
+
+    /** Update Tagihan Kepada for all items of one supplier in one go. */
+    const handleCustomerNameChange = (supplier: string, name: string) => {
+        setEditedCustomerNames(prev => ({ ...prev, [supplier]: name }))
     }
 
     const handleItemChange = (itemId: string, field: keyof InvoiceItem, value: any) => {
@@ -350,12 +368,15 @@ export function InvoiceDetailView({
                 payload.invoice_date = editedInvoiceDate
             }
 
-            // Existing items to update
+            // Existing items to update — inject the latest customer_name per supplier
             if (existingItems.length > 0) {
-                payload.items = existingItems
+                payload.items = existingItems.map(item => ({
+                    ...item,
+                    customer_name: editedCustomerNames[item.supplier] ?? item.customer_name ?? null,
+                }))
             }
 
-            // New items to insert
+            // New items to insert — also pick up the supplier's customer_name
             if (newItems.length > 0) {
                 payload.new_items = newItems.map(item => ({
                     supplier: item.supplier,
@@ -365,6 +386,7 @@ export function InvoiceDetailView({
                     unit: item.unit,
                     price: item.price,
                     total: item.total,
+                    customer_name: editedCustomerNames[item.supplier] ?? null,
                 }))
             }
 
@@ -856,6 +878,15 @@ export function InvoiceDetailView({
                                                                             className="mt-0.5 h-8 font-mono text-sm"
                                                                         />
                                                                     </div>
+                                                                    <div>
+                                                                        <label className="text-xs text-muted-foreground">Tagihan Kepada</label>
+                                                                        <Input
+                                                                            value={editedCustomerNames[supplier] ?? ''}
+                                                                            onChange={(e) => handleCustomerNameChange(supplier, e.target.value)}
+                                                                            placeholder="Contoh: SPPG Tambak"
+                                                                            className="mt-0.5 h-8 text-sm"
+                                                                        />
+                                                                    </div>
                                                                 </div>
                                                             ) : (
                                                                 <>
@@ -869,6 +900,11 @@ export function InvoiceDetailView({
                                                                         )}
                                                                         Subtotal: <span className="font-semibold text-foreground">{formatCurrency(subtotal)}</span>
                                                                     </p>
+                                                                    {items[0]?.customer_name && (
+                                                                        <p className="text-xs text-muted-foreground mt-1">
+                                                                            Tagihan Kepada: <span className="font-medium text-foreground">{items[0].customer_name}</span>
+                                                                        </p>
+                                                                    )}
                                                                 </>
                                                             )}
                                                         </div>
