@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
                 })
                 historyId = invoiceHistory.id
 
-                const allItems: Array<InvoiceItemForm & { supplier: string; invoice_number: string; pdf_file_path: string }> = []
+                const allItems: Array<InvoiceItemForm & { supplier: string; invoice_number: string; pdf_file_path: string; customer_name?: string | null }> = []
 
                 for (const pdf of pdfs) {
                     const safeSupplier = pdf.supplier.replace(/[^a-zA-Z0-9.-]/g, '-')
@@ -89,8 +89,16 @@ export async function POST(request: NextRequest) {
                     }
 
                     const supplierItems = parsedData[pdf.supplier] || []
+                    // Persist customer_name so it survives into /history and can be edited later
+                    const customerName = customerNames?.[pdf.supplier]
                     supplierItems.forEach((item: InvoiceItemForm) => {
-                        allItems.push({ ...item, supplier: pdf.supplier, invoice_number: pdf.invoiceNumber, pdf_file_path: pdfPath })
+                        allItems.push({
+                            ...item,
+                            supplier: pdf.supplier,
+                            invoice_number: pdf.invoiceNumber,
+                            pdf_file_path: pdfPath,
+                            customer_name: customerName,
+                        })
                     })
                 }
 

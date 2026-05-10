@@ -36,6 +36,7 @@ export async function createInvoiceItems(
         supplier: string
         invoice_number: string
         pdf_file_path: string
+        customer_name?: string | null
     }>
 ) {
     const supabase = await createClient()
@@ -50,6 +51,9 @@ export async function createInvoiceItems(
         price: item.price,
         total: item.total,
         pdf_file_path: item.pdf_file_path,
+        // customer_name = "Tagihan Kepada" (billing-to). Stored so user can
+        // edit it from /history later without losing context.
+        customer_name: item.customer_name ?? null,
     }))
 
     const { data, error } = await supabase

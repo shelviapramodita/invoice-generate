@@ -104,17 +104,23 @@ export async function PATCH(
                     )
                 }
 
+                const updatePayload: Record<string, any> = {
+                    supplier: item.supplier,
+                    invoice_number: item.invoice_number,
+                    item_name: item.item_name,
+                    quantity: qty,
+                    unit: item.unit,
+                    price: price,
+                    total: total,
+                }
+                // customer_name only sent if user actually edited it. undefined → don't touch column.
+                if (item.customer_name !== undefined) {
+                    updatePayload.customer_name = item.customer_name
+                }
+
                 const { error } = await supabase
                     .from('invoice_items')
-                    .update({
-                        supplier: item.supplier,
-                        invoice_number: item.invoice_number,
-                        item_name: item.item_name,
-                        quantity: qty,
-                        unit: item.unit,
-                        price: price,
-                        total: total,
-                    })
+                    .update(updatePayload)
                     .eq('id', item.id)
                 if (error) throw error
             }
@@ -131,6 +137,7 @@ export async function PATCH(
                 price: parseFloat(item.price),
                 total: parseFloat(item.total),
                 pdf_file_path: 'pending-regeneration',
+                customer_name: item.customer_name ?? null,
             }))
 
             const { error } = await supabase
@@ -186,6 +193,9 @@ export async function PATCH(
             for (const [supplier, supplierItems] of Object.entries(itemsBySupplier)) {
                 const invoiceNumber = supplierItems[0]?.invoice_number || '#KWITANSI0001'
                 const oldPdfPath = supplierItems[0]?.pdf_file_path
+                // customer_name = "Tagihan Kepada" — same for all items of one supplier
+                // (per the upload flow). Read from first item in the group.
+                const customerName = supplierItems[0]?.customer_name || undefined
 
                 const pdfItems = supplierItems.map((item: any) => ({
                     supplier: item.supplier,
@@ -198,13 +208,13 @@ export async function PATCH(
 
                 let template
                 if (supplier.includes('JAYAMEN')) {
-                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems })
+                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 } else if (supplier.includes('UNDI') || supplier.includes('YUWONO')) {
-                    template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems })
+                    template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 } else if (supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
-                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems })
+                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 } else {
-                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems })
+                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 }
 
                 const pdfBlob = await pdf(template).toBlob()
