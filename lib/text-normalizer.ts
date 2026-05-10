@@ -123,6 +123,20 @@ function isNoiseSegment(segment: string): boolean {
     // Quality modifiers: "terlalu tua"
     if (/^terlalu\s+/.test(lower)) return true
 
+    // Past-tense state descriptions: "sudah di sortir", "sudah bersih", "sudah dicuci"
+    if (/^sudah\s+/.test(lower)) return true
+
+    // Cleanliness instructions: "bersih dari akar", "bersih tanpa kotoran"
+    if (/^bersih\s+(?:dari|tanpa)\s+/.test(lower)) return true
+
+    // Color requirements: "warna hijau", "warna merah" — almost always a noise
+    // descriptor in product names (real items just say "Cabai Merah" not
+    // "Cabai Warna Merah")
+    if (/^warna\s+/.test(lower)) return true
+
+    // Compound: "daun warna hijau" — when "daun" is just a leaf-color descriptor
+    if (/^daun\s+warna\s+/.test(lower)) return true
+
     // Standalone quality words
     if (NOISE_STANDALONE_WORDS.has(lower)) return true
 
@@ -185,6 +199,16 @@ function stripNoiseNotes(s: string): string {
     //      "Pisang Yang Sudah Matang"          → "Pisang"
     //      "Bayam Yang Bersih (1 ikat)"        → "Bayam (1 ikat)"
     s = s.replace(/\s+yang\s+[^\s()]+(?:\s+[^\s()]+){0,2}(?=\s*(?:,|\(|$))/gi, '')
+
+    // 4b. Strip other inline noise phrases. "[^,()]*" greedily eats everything
+    //     up to the next comma/paren/end-of-string so the entire descriptor
+    //     gets removed in one shot. Order matters: "daun warna ..." runs
+    //     first so it consumes "Daun" before the standalone "warna" pattern
+    //     would leave it stranded.
+    s = s.replace(/\s+daun\s+warna\b[^,()]*/gi, '')          // "Daun Warna Hijau ..."
+    s = s.replace(/\s+sudah\b[^,()]*/gi, '')                 // "Sudah di sortir", "Sudah bersih ..."
+    s = s.replace(/\s+bersih\s+(?:dari|tanpa)\b[^,()]*/gi, '') // "Bersih dari Akar"
+    s = s.replace(/\s+warna\s+\w+(?:\s+[^,()]*)?/gi, '')     // "Warna Hijau ..."
 
     // 5. Cleanup: collapse whitespace and trim trailing punctuation
     s = s.replace(/\s+/g, ' ').trim()
