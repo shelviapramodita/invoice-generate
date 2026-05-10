@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, FileText, Calendar as CalendarIcon } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -59,14 +59,29 @@ function defaultBatchName(date: Date, sppgName: string, category?: SheetCategory
     return `Kwitansi ${sppg} - ${categoryStr}${dateStr}`
 }
 
+/** Format an integer into "#KWITANSI0001"-style invoice number (4-digit zero-padded). */
+function formatInvoiceNumber(n: number): string {
+    return `#KWITANSI${String(n).padStart(4, '0')}`
+}
+
+/**
+ * Build the initial config for a sheet. The invoice number is shared across
+ * all suppliers (one number per day, all 3 CV use the same kwitansi number).
+ * The actual sequential numbering across selected sheets is applied later via
+ * the auto-recompute effect — here we just set a placeholder that gets
+ * overwritten as soon as the user selects this sheet.
+ */
 function buildSheetConfig(sheet: SheetEntry, sppgName: string): SheetConfig {
     const date = sheet.detectedDate ? new Date(sheet.detectedDate + 'T12:00:00') : new Date()
     const numbers: Record<string, string> = {}
     const customers: Record<string, string> = {}
     const suppliers = sheet.data ? Object.keys(sheet.data) : []
     const customerName = sppgName ? `SPPG ${sppgName}` : 'SPPG Tambak'
-    suppliers.forEach((supplier, index) => {
-        numbers[supplier] = `#KWITANSI${String(index + 1).padStart(4, '0')}`
+    // Same kwitansi number for every supplier in this sheet — the auto-recompute
+    // effect will assign the real sequential number when the user picks this sheet.
+    const placeholderNumber = formatInvoiceNumber(1)
+    suppliers.forEach((supplier) => {
+        numbers[supplier] = placeholderNumber
         customers[supplier] = customerName
     })
     return {
@@ -76,6 +91,8 @@ function buildSheetConfig(sheet: SheetEntry, sppgName: string): SheetConfig {
         customerNames: customers,
     }
 }
+
+const STARTING_NUMBER_STORAGE_KEY = 'starting-invoice-number'
 
 export default function UploadPage() {
     const [sheets, setSheets] = useState<SheetEntry[]>([])
@@ -87,6 +104,61 @@ export default function UploadPage() {
     const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
     const [showPreview, setShowPreview] = useState(false)
     const [generatedPDFs, setGeneratedPDFs] = useState<GeneratedPDFEntry[]>([])
+    // Starting invoice number (used as base for sequential numbering across
+    // selected sheets). Persisted to localStorage so user doesn't need to
+    // re-enter every session — they just continue from where they left off.
+    const [startingNumber, setStartingNumber] = useState<number>(1)
+
+    // Load starting number from localStorage on mount
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        const stored = localStorage.getItem(STARTING_NUMBER_STORAGE_KEY)
+        if (stored) {
+            const n = parseInt(stored, 10)
+            if (!isNaN(n) && n > 0) setStartingNumber(n)
+        }
+    }, [])
+
+    // Persist starting number whenever it changes
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        localStorage.setItem(STARTING_NUMBER_STORAGE_KEY, String(startingNumber))
+    }, [startingNumber])
+
+    // Auto-recompute kwitansi numbers across selected sheets in chronological order.
+    // One number per sheet (date), shared across all 3 suppliers in that sheet.
+    // Triggers when selection changes or starting number changes.
+    useEffect(() => {
+        if (selectedSheetNames.length === 0) return
+
+        const sortedSelected = [...selectedSheetNames].sort((a, b) => {
+            const sa = sheets.find(s => s.sheetName === a)
+            const sb = sheets.find(s => s.sheetName === b)
+            const da = sa?.detectedDate || sa?.dateRangeStart || ''
+            const db = sb?.detectedDate || sb?.dateRangeStart || ''
+            return da.localeCompare(db)
+        })
+
+        setConfigs(prev => {
+            const updated = { ...prev }
+            sortedSelected.forEach((sheetName, i) => {
+                const cfg = updated[sheetName]
+                if (!cfg) return
+                const newNumber = formatInvoiceNumber(startingNumber + i)
+                // Only update if it actually differs — avoids unnecessary re-renders
+                const suppliers = Object.keys(cfg.invoiceNumbers)
+                const allSame = suppliers.every(s => cfg.invoiceNumbers[s] === newNumber)
+                if (allSame) return
+                const newInvoiceNumbers: Record<string, string> = {}
+                suppliers.forEach(s => { newInvoiceNumbers[s] = newNumber })
+                updated[sheetName] = { ...cfg, invoiceNumbers: newInvoiceNumbers }
+            })
+            return updated
+        })
+    // sheets is included so re-parse triggers recompute, but configs is omitted
+    // to prevent the effect from looping on its own state writes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedSheetNames, startingNumber, sheets])
 
     const handleParsed = (parsedSheets: SheetEntry[], fileName: string) => {
         // Detect SPPG name from filename (e.g. "RAB SPPG Tambak (3).xlsx" → "Tambak")
@@ -350,6 +422,32 @@ export default function UploadPage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
+                                {/* Starting kwitansi number — applies across all selected sheets */}
+                                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                        <div className="flex-1 min-w-[200px]">
+                                            <Label className="text-sm font-medium">Nomor Kwitansi Awal</Label>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                Hari pertama mulai dari nomor ini — hari berikutnya berurutan otomatis
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-mono text-muted-foreground">#KWITANSI</span>
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                value={startingNumber}
+                                                onChange={(e) => {
+                                                    const n = parseInt(e.target.value, 10)
+                                                    if (!isNaN(n) && n > 0) setStartingNumber(n)
+                                                }}
+                                                className="w-28 font-mono"
+                                                placeholder="916"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* Tab strip */}
                                 {selectedSheetNames.length > 1 && (
                                     <div className="flex gap-1 overflow-x-auto pb-2 border-b">
@@ -425,30 +523,27 @@ export default function UploadPage() {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-3 pt-2">
-                                            <Label>Nomor Kwitansi per Supplier</Label>
-                                            <div className="space-y-2">
-                                                {previewSuppliers.map(supplier => (
-                                                    <div key={supplier} className="flex items-center gap-3">
-                                                        <Label className="w-48 text-sm truncate" title={supplier}>
-                                                            {supplier}
-                                                        </Label>
-                                                        <Input
-                                                            value={previewConfig.invoiceNumbers[supplier] || ''}
-                                                            onChange={(e) =>
-                                                                updateConfig(previewSheet.sheetName, {
-                                                                    invoiceNumbers: {
-                                                                        ...previewConfig.invoiceNumbers,
-                                                                        [supplier]: e.target.value,
-                                                                    },
-                                                                })
-                                                            }
-                                                            placeholder="#KWITANSI0001"
-                                                            className="flex-1"
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
+                                        <div className="space-y-2 pt-2">
+                                            <Label>Nomor Kwitansi</Label>
+                                            <Input
+                                                value={Object.values(previewConfig.invoiceNumbers)[0] || ''}
+                                                onChange={(e) => {
+                                                    // Apply to ALL suppliers in this sheet — one number per day
+                                                    const newNumber = e.target.value
+                                                    const newInvoiceNumbers: Record<string, string> = {}
+                                                    previewSuppliers.forEach(s => {
+                                                        newInvoiceNumbers[s] = newNumber
+                                                    })
+                                                    updateConfig(previewSheet.sheetName, {
+                                                        invoiceNumbers: newInvoiceNumbers,
+                                                    })
+                                                }}
+                                                placeholder="#KWITANSI0916"
+                                                className="font-mono"
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Berlaku untuk semua supplier di hari ini ({previewSuppliers.length} supplier)
+                                            </p>
                                         </div>
 
                                         <div className="space-y-3 pt-2">
