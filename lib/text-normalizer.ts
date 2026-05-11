@@ -345,24 +345,84 @@ export function normalizeItemName(raw: string): string {
     return s
 }
 
+// Words commonly found in filenames that are NOT part of the SPPG name.
+// Stripped (case-insensitive) before extracting the actual name.
+const FILENAME_NOISE_WORDS = [
+    'RAB', 'INVOICE', 'KWITANSI', 'DAFTAR', 'COPY OF', 'COPY',
+    'FINAL', 'DRAFT', 'NEW', 'BARU', 'EDIT', 'REVISED', 'REV',
+    'TEMPLATE', 'CONTOH',
+]
+
 /**
- * Extract the SPPG short name from a workbook filename.
+ * Title-case a word, but preserve all-uppercase short tokens that are likely
+ * acronyms (PGRI, SD, SMA, SMK, UPT, MI, TK). Otherwise capitalize first
+ * letter + lowercase rest.
+ *
+ *   "PGRI"      → "PGRI"  (kept, 4-char all-caps)
+ *   "purwojati" → "Purwojati"
+ *   "TAMBAK"    → "Tambak"  (5+ chars not treated as acronym)
+ */
+function smartTitleCaseWord(word: string): string {
+    if (!word) return word
+    // Preserve all-caps short acronyms (2-5 chars, all letters uppercase)
+    if (
+        word === word.toUpperCase() &&
+        /^[A-Z]+$/.test(word) &&
+        word.length >= 2 &&
+        word.length <= 5
+    ) {
+        return word
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+}
+
+/**
+ * Extract the SPPG short name from a workbook filename. Returns the name with
+ * smart casing (acronyms preserved, other words title-cased).
+ *
+ * Strategy:
+ *   1. Strip extension + parenthesized noise like "(3)".
+ *   2. Strip common filename noise words (RAB, INVOICE, DRAFT, etc.).
+ *   3. Strip "SPPG" word — it's just a prefix marker, not part of the name.
+ *   4. Strip number-only tokens (years like "2026", duplicates like "1").
+ *   5. What's left is the SPPG name. Apply smart casing.
  *
  * Examples:
- *   "RAB SPPG Tambak (3).xlsx" → "Tambak"
- *   "SPPG Pandansari.xlsx"      → "Pandansari"
- *   "RAB SPPG Tambak Selatan.xlsx" → "Tambak Selatan"
- *   "anything-else.xlsx"        → undefined
+ *   "RAB SPPG Tambak (3).xlsx"        → "Tambak"
+ *   "RAB SPPG PGRI Purwojati.xlsx"    → "PGRI Purwojati"
+ *   "SPPG Pandansari 2026.xlsx"        → "Pandansari"
+ *   "PGRI Purwojati.xlsx"              → "PGRI Purwojati"   (no SPPG prefix)
+ *   "RAB SPPG Tambak Selatan.xlsx"    → "Tambak Selatan"
+ *   "invoice.xlsx"                     → undefined (no name left)
  */
 export function extractSppgNameFromFilename(filename: string): string | undefined {
     if (!filename) return undefined
-    // Strip extension
-    const stem = filename.replace(/\.[^.]+$/, '')
-    // Match "SPPG " followed by capitalized word(s), stopping at a paren / digit / end
-    const m = stem.match(/SPPG\s+([A-Za-z][A-Za-z\s]*?)(?=\s*[(\d]|$)/i)
-    if (!m) return undefined
-    const raw = m[1].trim()
-    if (!raw) return undefined
-    // Title-case each word in the SPPG name for consistency
-    return raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+
+    // 1. Strip extension
+    let stem = filename.replace(/\.[^.]+$/, '').trim()
+    if (!stem) return undefined
+
+    // 2. Strip parenthesized junk like "(3)", "(final)", "(copy)"
+    stem = stem.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
+
+    // 3. Strip noise words (RAB, INVOICE, DRAFT, etc.)
+    for (const word of FILENAME_NOISE_WORDS) {
+        const re = new RegExp(`\\b${word.replace(/\s+/g, '\\s+')}\\b`, 'gi')
+        stem = stem.replace(re, ' ')
+    }
+
+    // 4. Strip the "SPPG" marker itself
+    stem = stem.replace(/\bSPPG\b/gi, ' ')
+
+    // 5. Collapse whitespace + strip leading/trailing separators
+    stem = stem.replace(/\s+/g, ' ').replace(/^[-_\s]+|[-_\s]+$/g, '').trim()
+
+    if (!stem) return undefined
+
+    // 6. Filter out number-only tokens (years like "2026", "v2", "1")
+    const tokens = stem.split(/\s+/).filter(t => !/^\d+$/.test(t))
+    if (tokens.length === 0) return undefined
+
+    // 7. Smart-case each token (preserve acronyms like PGRI)
+    return tokens.map(smartTitleCaseWord).join(' ')
 }

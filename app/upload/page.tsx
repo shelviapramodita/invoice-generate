@@ -125,6 +125,36 @@ export default function UploadPage() {
         localStorage.setItem(STARTING_NUMBER_STORAGE_KEY, String(startingNumber))
     }, [startingNumber])
 
+    // When the user edits the SPPG name (or it gets re-detected on new upload),
+    // propagate the change to all per-sheet configs: rewrite batch names to
+    // include the new SPPG and update each supplier's customer_name ("Tagihan
+    // Kepada"). Runs whenever sppgName changes.
+    useEffect(() => {
+        if (sheets.length === 0) return
+        setConfigs(prev => {
+            const updated = { ...prev }
+            Object.keys(updated).forEach(sheetName => {
+                const sheet = sheets.find(s => s.sheetName === sheetName)
+                if (!sheet) return
+                const cfg = updated[sheetName]
+                const newBatchName = defaultBatchName(cfg.invoiceDate, sppgName, sheet.category)
+                const newCustomer = sppgName ? `SPPG ${sppgName}` : ''
+                const newCustomerNames: Record<string, string> = {}
+                Object.keys(cfg.customerNames).forEach(supplier => {
+                    newCustomerNames[supplier] = newCustomer
+                })
+                updated[sheetName] = {
+                    ...cfg,
+                    batchName: newBatchName,
+                    customerNames: newCustomerNames,
+                }
+            })
+            return updated
+        })
+    // configs intentionally excluded to avoid loop on its own writes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sppgName, sheets])
+
     // Auto-recompute kwitansi numbers across selected sheets in chronological order.
     // One number per sheet (date), shared across all 3 suppliers in that sheet.
     // Triggers when selection changes or starting number changes.
@@ -161,8 +191,10 @@ export default function UploadPage() {
     }, [selectedSheetNames, startingNumber, sheets])
 
     const handleParsed = (parsedSheets: SheetEntry[], fileName: string) => {
-        // Detect SPPG name from filename (e.g. "RAB SPPG Tambak (3).xlsx" → "Tambak")
-        const detectedSppg = extractSppgNameFromFilename(fileName) || 'Tambak'
+        // Detect SPPG name from filename. If extraction fails (no SPPG marker
+        // found and nothing left after stripping noise), leave empty so the
+        // user is forced to fill in the field below.
+        const detectedSppg = extractSppgNameFromFilename(fileName) || ''
         setSppgName(detectedSppg)
         setSheets(parsedSheets)
 
@@ -422,6 +454,28 @@ export default function UploadPage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
+                                {/* SPPG name — applies to all batch names + customer names */}
+                                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                        <div className="flex-1 min-w-[200px]">
+                                            <Label className="text-sm font-medium">Nama SPPG</Label>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                Auto-detect dari nama file. Edit kalau tidak sesuai — batch name &
+                                                "Tagihan Kepada" akan ikut otomatis.
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-mono text-muted-foreground">SPPG</span>
+                                            <Input
+                                                value={sppgName}
+                                                onChange={(e) => setSppgName(e.target.value)}
+                                                className="w-64"
+                                                placeholder="Tambak / PGRI Purwojati / ..."
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* Starting kwitansi number — applies across all selected sheets */}
                                 <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
                                     <div className="flex items-center justify-between gap-3 flex-wrap">
