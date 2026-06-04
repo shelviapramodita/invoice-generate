@@ -118,32 +118,54 @@ export async function PATCH(
                     updatePayload.customer_name = item.customer_name
                 }
 
-                const { error } = await supabase
+                let { error: updateError } = await supabase
                     .from('invoice_items')
                     .update(updatePayload)
                     .eq('id', item.id)
-                if (error) throw error
+
+                // Fallback if customer_name column doesn't exist yet
+                if (updateError && /customer_name/i.test(updateError.message)) {
+                    console.warn('[invoice_items UPDATE] customer_name column missing — retrying without it')
+                    const { customer_name: _omit, ...rest } = updatePayload
+                    void _omit
+                    ;({ error: updateError } = await supabase
+                        .from('invoice_items')
+                        .update(rest)
+                        .eq('id', item.id))
+                }
+                if (updateError) throw updateError
             }
         }
 
         if (new_items && new_items.length > 0) {
-            const insertData = new_items.map((item: any) => ({
-                history_id: id,
-                supplier: item.supplier,
-                invoice_number: item.invoice_number || '#KWITANSI0001',
-                item_name: item.item_name,
-                quantity: parseFloat(item.quantity),
-                unit: item.unit,
-                price: parseFloat(item.price),
-                total: parseFloat(item.total),
-                pdf_file_path: 'pending-regeneration',
-                customer_name: item.customer_name ?? null,
-            }))
+            const buildNewRow = (item: any, includeCustomerName: boolean) => {
+                const row: Record<string, any> = {
+                    history_id: id,
+                    supplier: item.supplier,
+                    invoice_number: item.invoice_number || '#KWITANSI0001',
+                    item_name: item.item_name,
+                    quantity: parseFloat(item.quantity),
+                    unit: item.unit,
+                    price: parseFloat(item.price),
+                    total: parseFloat(item.total),
+                    pdf_file_path: 'pending-regeneration',
+                }
+                if (includeCustomerName) row.customer_name = item.customer_name ?? null
+                return row
+            }
 
-            const { error } = await supabase
+            let { error: insertError } = await supabase
                 .from('invoice_items')
-                .insert(insertData)
-            if (error) throw error
+                .insert(new_items.map((item: any) => buildNewRow(item, true)))
+
+            // Fallback if customer_name column doesn't exist
+            if (insertError && /customer_name/i.test(insertError.message)) {
+                console.warn('[invoice_items INSERT new_items] customer_name column missing — retrying without it')
+                ;({ error: insertError } = await supabase
+                    .from('invoice_items')
+                    .insert(new_items.map((item: any) => buildNewRow(item, false))))
+            }
+            if (insertError) throw insertError
         }
 
         const { data: allItems, error: fetchError } = await supabase

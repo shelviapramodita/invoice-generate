@@ -104,7 +104,13 @@ export async function POST(request: NextRequest) {
 
                 await createInvoiceItems(invoiceHistory.id, allItems)
             } catch (dbError) {
-                console.error('Failed to save to database:', (dbError as Error).message)
+                // CRITICAL: previously this was swallowed silently, which meant a
+                // missing customer_name column produced an empty invoice_history
+                // row + zero items — visible as "0 supplier / 0 items / Rp 0"
+                // in /history. We now log loudly so the same issue is debuggable.
+                console.error('[generate-pdf] Failed to save invoice_items:', (dbError as Error).message)
+                console.error('[generate-pdf] If the error mentions customer_name, run the migration: supabase/migrations/20260511_add_customer_name_to_invoice_items.sql')
+                console.error('[generate-pdf] invoice_history row WAS created but is now orphaned (no items). Consider deleting it from /history.')
             }
         }
 
