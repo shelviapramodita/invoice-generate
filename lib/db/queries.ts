@@ -41,28 +41,46 @@ export async function createInvoiceItems(
 ) {
     const supabase = await createClient()
 
-    const itemsToInsert = items.map((item) => ({
-        history_id: historyId,
-        supplier: item.supplier,
-        invoice_number: item.invoice_number,
-        item_name: item.item_name,
-        quantity: item.quantity,
-        unit: item.unit,
-        price: item.price,
-        total: item.total,
-        pdf_file_path: item.pdf_file_path,
-        // customer_name = "Tagihan Kepada" (billing-to). Stored so user can
-        // edit it from /history later without losing context.
-        customer_name: item.customer_name ?? null,
-    }))
+    const buildRow = (item: typeof items[number], includeCustomerName: boolean) => {
+        const row: Record<string, any> = {
+            history_id: historyId,
+            supplier: item.supplier,
+            invoice_number: item.invoice_number,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit: item.unit,
+            price: item.price,
+            total: item.total,
+            pdf_file_path: item.pdf_file_path,
+        }
+        if (includeCustomerName) {
+            row.customer_name = item.customer_name ?? null
+        }
+        return row
+    }
 
-    const { data, error } = await supabase
+    // Try with customer_name column first. If the column doesn't exist (migration
+    // not yet run), Supabase returns an error mentioning customer_name — fall
+    // back to inserting without it so the core save flow keeps working.
+    let result = await supabase
         .from('invoice_items')
-        .insert(itemsToInsert)
+        .insert(items.map(item => buildRow(item, true)))
         .select()
 
-    if (error) throw new Error(`Failed to create invoice items: ${error.message}`)
-    return data
+    if (result.error && /customer_name/i.test(result.error.message)) {
+        console.warn(
+            '[invoice_items] customer_name column missing. Re-inserting without it. ' +
+            'Run supabase/migrations/20260511_add_customer_name_to_invoice_items.sql ' +
+            'in your Supabase Dashboard → SQL Editor to enable the "Tagihan Kepada" edit feature.'
+        )
+        result = await supabase
+            .from('invoice_items')
+            .insert(items.map(item => buildRow(item, false)))
+            .select()
+    }
+
+    if (result.error) throw new Error(`Failed to create invoice items: ${result.error.message}`)
+    return result.data
 }
 
 export async function getInvoiceHistory(limit = 50) {
