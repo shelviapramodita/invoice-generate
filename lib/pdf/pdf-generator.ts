@@ -57,7 +57,7 @@ async function generatePDFForSupplier(
     let template
 
     // Select appropriate template based on supplier
-    if (supplier.includes('JAYAMEN')) {
+    if (supplier.includes('JAYAMEN') || supplier.includes('PURWOTO')) {
         template = JayamenTemplate({
             invoiceNumber,
             invoiceDate,

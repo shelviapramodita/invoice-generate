@@ -15,9 +15,9 @@ export interface SupplierConfig {
 }
 
 export const supplierMapping: Record<string, SupplierConfig> = {
-    'CV JAYAMEN': {
-        name: 'CV JAYAMEN',
-        displayName: 'CV JAYAMEN',
+    'UMKM PURWOTO': {
+        name: 'UMKM PURWOTO',
+        displayName: 'UMKM PURWOTO',
         themeColor: '#84CC16', // Lime green
         bankAccount: '0951810694',
         bankName: 'BNI',
@@ -62,15 +62,21 @@ export const supplierMapping: Record<string, SupplierConfig> = {
 
 /**
  * Helper function untuk mendapatkan config supplier berdasarkan nama
- * Support format: "CV JAYAMEN", "0951810694 BNI", atau nomor rekening saja
+ * Support format: "UMKM PURWOTO", "0951810694 BNI", atau nomor rekening saja
  */
 export function getSupplierConfig(supplierName: string): SupplierConfig | null {
     // Normalize supplier name (trim and uppercase)
     const normalized = supplierName.trim().toUpperCase()
 
-    // Try exact match first (untuk "CV JAYAMEN" format)
+    // Try exact match first (untuk "UMKM PURWOTO" format)
     if (supplierMapping[normalized]) {
         return supplierMapping[normalized]
+    }
+
+    // Legacy: sheet Excel lama masih bisa pakai nama lama "CV JAYAMEN"/"JAYAMEN"
+    // sebelum ganti nama jadi UMKM PURWOTO
+    if (normalized.includes('JAYAMEN')) {
+        return supplierMapping['UMKM PURWOTO']
     }
 
     // Try to match by account number (untuk "0951810694 BNI" format)

@@ -119,7 +119,7 @@ export const uploadFormSchema = z.object({
  * Validate supplier name apakah valid
  */
 export function isValidSupplier(supplierName: string): boolean {
-    const validSuppliers = ['CV JAYAMEN', 'UMKM UNDI YUWONO', 'CV SEKAR WIJAYAKUSUMA', 'SRI KARYA MUKTI', 'UD HIDAYAT']
+    const validSuppliers = ['UMKM PURWOTO', 'UMKM UNDI YUWONO', 'CV SEKAR WIJAYAKUSUMA', 'SRI KARYA MUKTI', 'UD HIDAYAT']
     const normalized = supplierName.trim().toUpperCase()
 
     return validSuppliers.some(valid =>
@@ -133,7 +133,7 @@ export function isValidSupplier(supplierName: string): boolean {
 export function normalizeSupplierName(supplierName: string): string {
     const normalized = supplierName.trim().toUpperCase()
 
-    if (normalized.includes('JAYAMEN')) return 'CV JAYAMEN'
+    if (normalized.includes('JAYAMEN') || normalized.includes('PURWOTO')) return 'UMKM PURWOTO'
     if (normalized.includes('UNDI') || normalized.includes('YUWONO')) return 'UMKM UNDI YUWONO'
     if (normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) return 'CV SEKAR WIJAYAKUSUMA'
     if (normalized.includes('SRI') || normalized.includes('KARYA MUKTI')) return 'SRI KARYA MUKTI'
