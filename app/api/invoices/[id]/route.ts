@@ -209,6 +209,8 @@ export async function PATCH(
             const { JayamenTemplate } = await import('@/lib/pdf/templates/jayamen-template')
             const { UndiYuwonoTemplate } = await import('@/lib/pdf/templates/undi-yuwono-template')
             const { SekarWijayakusumaTemplate } = await import('@/lib/pdf/templates/sekar-wijayakusuma-template')
+            const { SriKaryaMuktiTemplate } = await import('@/lib/pdf/templates/sri-karya-mukti-template')
+            const { UdHidayatTemplate } = await import('@/lib/pdf/templates/ud-hidayat-template')
 
             const invoiceDateParsed = new Date(invoiceHistory.invoice_date)
 
@@ -235,6 +237,10 @@ export async function PATCH(
                     template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 } else if (supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
                     template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
+                } else if (supplier.includes('SRI') || supplier.includes('KARYA MUKTI')) {
+                    template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
+                } else if (supplier.includes('HIDAYAT')) {
+                    template = UdHidayatTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 } else {
                     template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 }

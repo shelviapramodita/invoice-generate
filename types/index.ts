@@ -13,7 +13,7 @@ export interface InvoiceHistory {
 export interface InvoiceItem {
     id: string
     history_id: string
-    supplier: string // CV JAYAMEN, UMKM UNDI YUWONO, CV SEKAR WIJAYAKUSUMA
+    supplier: string // CV JAYAMEN, UMKM UNDI YUWONO, CV SEKAR WIJAYAKUSUMA, SRI KARYA MUKTI, UD HIDAYAT
     item_name: string // URAIAN dari Excel
     quantity: number // QTY dari Excel
     unit: string // SATUAN dari Excel
@@ -64,6 +64,8 @@ export interface ParsedExcelData {
     'CV JAYAMEN'?: InvoiceItemForm[]
     'UMKM UNDI YUWONO'?: InvoiceItemForm[]
     'CV SEKAR WIJAYAKUSUMA'?: InvoiceItemForm[]
+    'SRI KARYA MUKTI'?: InvoiceItemForm[]
+    'UD HIDAYAT'?: InvoiceItemForm[]
     [key: string]: InvoiceItemForm[] | undefined
 }
 
