@@ -6,6 +6,8 @@ import { getNextInvoiceNumber } from './utils'
 import { JayamenTemplate } from './templates/jayamen-template'
 import { UndiYuwonoTemplate } from './templates/undi-yuwono-template'
 import { SekarWijayakusumaTemplate } from './templates/sekar-wijayakusuma-template'
+import { SriKaryaMuktiTemplate } from './templates/sri-karya-mukti-template'
+import { UdHidayatTemplate } from './templates/ud-hidayat-template'
 
 // Helper to sanitize filename (remove/replace invalid characters)
 function sanitizeFilename(name: string): string {
@@ -71,6 +73,20 @@ async function generatePDFForSupplier(
         })
     } else if (supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
         template = SekarWijayakusumaTemplate({
+            invoiceNumber,
+            invoiceDate,
+            items,
+            customerName: supplierCustomerName,
+        })
+    } else if (supplier.includes('SRI') || supplier.includes('KARYA MUKTI')) {
+        template = SriKaryaMuktiTemplate({
+            invoiceNumber,
+            invoiceDate,
+            items,
+            customerName: supplierCustomerName,
+        })
+    } else if (supplier.includes('HIDAYAT')) {
+        template = UdHidayatTemplate({
             invoiceNumber,
             invoiceDate,
             items,

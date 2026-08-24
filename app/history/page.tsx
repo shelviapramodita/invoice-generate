@@ -9,6 +9,8 @@ import { HistoryTable } from '@/components/history/history-table'
 import { HistoryFilters, FilterState } from '@/components/history/history-filters'
 import { UserMenu } from '@/components/auth/user-menu'
 
+import { getAllSuppliers } from '@/data/cv-reference'
+
 interface InvoiceHistory {
     id: string
     batch_name: string | null
@@ -129,7 +131,7 @@ export default function HistoryPage() {
 
     // Get unique suppliers for filter dropdown
     const uniqueSuppliers = useMemo(() => {
-        return ['CV JAYAMEN', 'UMKM UNDI YUWONO', 'CV SEKAR WIJAYAKUSUMA']
+        return getAllSuppliers().map((s) => s.name)
     }, [])
 
     return (
