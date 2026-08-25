@@ -152,6 +152,16 @@ const SKIP_PATTERNS = [
 // Captures: (1) account number, (2) bank name
 const SUPPLIER_PATTERN = /NO\s*REK\.\s*(\d+)\s*(.+?)(?:\s*-\s*)?$/i
 
+// Supplier names yang sengaja diabaikan — bukan CV/UMKM asli yang perlu di-invoice-kan
+// (mis. KDMP adalah kelompok/program internal SPPG, bukan supplier eksternal)
+const IGNORED_SUPPLIERS = ['KDMP']
+
+function isIgnoredSupplier(supplierName: string | undefined): boolean {
+    if (!supplierName) return false
+    const upper = supplierName.toUpperCase()
+    return IGNORED_SUPPLIERS.some(name => upper.includes(name))
+}
+
 /**
  * Check if a row should be skipped (category, total, etc.)
  */
@@ -468,6 +478,12 @@ function parseWorksheetRows(rawRows: unknown[][]): ParseResult {
                 if (lookaheadSupplier) {
                     transformedRow.SUPPLIER = lookaheadSupplier
                 }
+            }
+
+            // Abaikan baris dengan supplier yang memang sengaja gak di-invoice-kan (mis. KDMP)
+            if (isIgnoredSupplier(transformedRow.SUPPLIER)) {
+                skippedRows++
+                continue
             }
 
             // Skip rows that don't have valid data
