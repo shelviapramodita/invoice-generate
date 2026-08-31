@@ -78,6 +78,16 @@ async function generatePDFForSupplier(
             items,
             customerName: supplierCustomerName,
         })
+    } else if (supplier.includes('WIDYONO') || supplier.includes('WIDIYONO')) {
+        // Sama seperti CV Sekar Wijayakusuma (rekening & template sama persis),
+        // cuma nama yang tercetak di bawah ttd yang beda
+        template = SekarWijayakusumaTemplate({
+            invoiceNumber,
+            invoiceDate,
+            items,
+            customerName: supplierCustomerName,
+            signatureName: 'SUSILO WIDYONO',
+        })
     } else if (supplier.includes('SRI') || supplier.includes('KARYA MUKTI')) {
         template = SriKaryaMuktiTemplate({
             invoiceNumber,

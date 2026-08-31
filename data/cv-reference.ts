@@ -42,6 +42,18 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         address: 'Dsun.K1, 001/008, RT.012, Kwitang, Gemeter, Kab. Banyumas',
         category: 'SAYUR & PROTEIN',
     },
+    // Sama persis dengan CV SEKAR WIJAYAKUSUMA (rekening & pemilik sama) —
+    // beberapa sheet Excel nulis nama pemilik rekening ini, bukan nama CV-nya.
+    // Pakai template Sekar (merah) juga, cuma nama di bawah ttd yang beda.
+    'SUSILO WIDYONO': {
+        name: 'SUSILO WIDYONO',
+        displayName: 'SUSILO WIDYONO',
+        themeColor: '#DC2626', // Red, sama seperti CV Sekar Wijayakusuma
+        bankAccount: '0291155789',
+        bankName: 'BNI',
+        address: 'Dsun.K1, 001/008, RT.012, Kwitang, Gemeter, Kab. Banyumas',
+        category: 'SAYUR & PROTEIN',
+    },
     'SRI KARYA MUKTI': {
         name: 'SRI KARYA MUKTI',
         displayName: 'SRI KARYA MUKTI',

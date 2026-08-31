@@ -64,6 +64,7 @@ export interface ParsedExcelData {
     'UMKM PURWOTO'?: InvoiceItemForm[]
     'UMKM UNDI YUWONO'?: InvoiceItemForm[]
     'CV SEKAR WIJAYAKUSUMA'?: InvoiceItemForm[]
+    'SUSILO WIDYONO'?: InvoiceItemForm[]
     'SRI KARYA MUKTI'?: InvoiceItemForm[]
     'UD HIDAYAT'?: InvoiceItemForm[]
     [key: string]: InvoiceItemForm[] | undefined

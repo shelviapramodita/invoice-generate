@@ -15,6 +15,10 @@ interface SekarWijayakusumaTemplateProps {
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
+    // Nama yang tercetak di bawah tanda tangan. Beberapa sheet Excel nulis
+    // supplier ini atas nama pemilik rekening ("SUSILO WIDYONO") bukan nama
+    // CV-nya, tapi logo/header/info pembayaran tetap sama persis.
+    signatureName?: string
 }
 
 // Styles for SEKAR WIJAYAKUSUMA template (Red theme)
@@ -199,6 +203,7 @@ export function SekarWijayakusumaTemplate({
     invoiceDate,
     items,
     customerName = 'SPPG Pandansari',
+    signatureName = 'CV SEKAR WIJAYAKUSUMA',
 }: SekarWijayakusumaTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
 
@@ -281,7 +286,7 @@ export function SekarWijayakusumaTemplate({
                             />
                         </View>
                         <View style={styles.signatureLine} />
-                        <Text style={styles.signatureName}>CV SEKAR WIJAYAKUSUMA</Text>
+                        <Text style={styles.signatureName}>{signatureName}</Text>
                         <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>
                     </View>
                 </View>
