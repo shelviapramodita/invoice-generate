@@ -237,6 +237,8 @@ export async function PATCH(
                     template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 } else if (supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
                     template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
+                } else if (supplier.includes('WIDYONO') || supplier.includes('WIDIYONO')) {
+                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO' })
                 } else if (supplier.includes('SRI') || supplier.includes('KARYA MUKTI')) {
                     template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 } else if (supplier.includes('HIDAYAT')) {
