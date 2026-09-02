@@ -119,7 +119,7 @@ export const uploadFormSchema = z.object({
  * Validate supplier name apakah valid
  */
 export function isValidSupplier(supplierName: string): boolean {
-    const validSuppliers = ['UMKM PURWOTO', 'UMKM UNDI YUWONO', 'CV SEKAR WIJAYAKUSUMA', 'SUSILO WIDYONO', 'SRI KARYA MUKTI', 'UD HIDAYAT']
+    const validSuppliers = ['PT JAYAMEN GROUP MANDIRI', 'UMKM UNDI YUWONO', 'NUSANTARA FOOD', 'SUSILO WIDYONO', 'SRI KARYA MUKTI', 'UD HIDAYAT']
     const normalized = supplierName.trim().toUpperCase()
 
     return validSuppliers.some(valid =>
@@ -133,14 +133,19 @@ export function isValidSupplier(supplierName: string): boolean {
 export function normalizeSupplierName(supplierName: string): string {
     const normalized = supplierName.trim().toUpperCase()
 
-    if (normalized.includes('JAYAMEN') || normalized.includes('PURWOTO')) return 'UMKM PURWOTO'
+    // Nama lama "CV JAYAMEN"/"JAYAMEN"/"UMKM PURWOTO" sebelum ganti jadi PT
+    // Jayamen Group Mandiri tetap dikenali (backward-compat)
+    if (normalized.includes('JAYAMEN') || normalized.includes('PURWOTO')) return 'PT JAYAMEN GROUP MANDIRI'
     if (normalized.includes('UNDI') || normalized.includes('YUWONO')) return 'UMKM UNDI YUWONO'
-    // "SUSILO WIDYONO" adalah nama pemilik rekening CV Sekar Wijayakusuma —
-    // beberapa sheet Excel nulis nama pemilik ini, bukan nama CV-nya. Dicek
-    // duluan sebelum SEKAR/WIJAYAKUSUMA supaya tetap jadi identitas sendiri
-    // (template & rekening sama, tapi nama tercetak beda).
+    // "SUSILO WIDYONO" adalah nama pemilik rekening Nusantara Food (dulu CV
+    // Sekar Wijayakusuma) — beberapa sheet Excel nulis nama pemilik ini,
+    // bukan nama perusahaannya. Dicek duluan sebelum SEKAR/WIJAYAKUSUMA
+    // supaya tetap jadi identitas sendiri (template & rekening sama, tapi
+    // nama tercetak beda).
     if (normalized.includes('WIDYONO') || normalized.includes('WIDIYONO')) return 'SUSILO WIDYONO'
-    if (normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) return 'CV SEKAR WIJAYAKUSUMA'
+    // Nama lama "CV SEKAR WIJAYAKUSUMA" sebelum ganti jadi Nusantara Food
+    // tetap dikenali (backward-compat)
+    if (normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
     if (normalized.includes('SRI') || normalized.includes('KARYA MUKTI')) return 'SRI KARYA MUKTI'
     if (normalized.includes('HIDAYAT')) return 'UD HIDAYAT'
 

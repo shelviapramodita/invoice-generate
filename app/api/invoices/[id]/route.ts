@@ -235,7 +235,7 @@ export async function PATCH(
                     template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 } else if (supplier.includes('UNDI') || supplier.includes('YUWONO')) {
                     template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
-                } else if (supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
+                } else if (supplier.includes('NUSANTARA') || supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
                     template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                 } else if (supplier.includes('WIDYONO') || supplier.includes('WIDIYONO')) {
                     template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO' })

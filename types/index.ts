@@ -13,7 +13,7 @@ export interface InvoiceHistory {
 export interface InvoiceItem {
     id: string
     history_id: string
-    supplier: string // UMKM PURWOTO, UMKM UNDI YUWONO, CV SEKAR WIJAYAKUSUMA, SRI KARYA MUKTI, UD HIDAYAT
+    supplier: string // PT JAYAMEN GROUP MANDIRI, UMKM UNDI YUWONO, NUSANTARA FOOD, SUSILO WIDYONO, SRI KARYA MUKTI, UD HIDAYAT
     item_name: string // URAIAN dari Excel
     quantity: number // QTY dari Excel
     unit: string // SATUAN dari Excel
@@ -61,9 +61,9 @@ export interface InvoiceItemForm {
 
 // Parsed Data Types (Group by supplier)
 export interface ParsedExcelData {
-    'UMKM PURWOTO'?: InvoiceItemForm[]
+    'PT JAYAMEN GROUP MANDIRI'?: InvoiceItemForm[]
     'UMKM UNDI YUWONO'?: InvoiceItemForm[]
-    'CV SEKAR WIJAYAKUSUMA'?: InvoiceItemForm[]
+    'NUSANTARA FOOD'?: InvoiceItemForm[]
     'SUSILO WIDYONO'?: InvoiceItemForm[]
     'SRI KARYA MUKTI'?: InvoiceItemForm[]
     'UD HIDAYAT'?: InvoiceItemForm[]

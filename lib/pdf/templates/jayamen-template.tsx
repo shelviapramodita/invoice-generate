@@ -38,12 +38,31 @@ const styles = StyleSheet.create({
         borderBottomWidth: 2,
         borderBottomColor: '#84CC16',
         paddingBottom: 8,
-        alignItems: 'flex-end',
+        alignItems: 'flex-start',
+    },
+    companyBlock: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     logo: {
-        width: 90,
-        height: 65,
+        width: 55,
+        height: 55,
         objectFit: 'contain',
+        marginRight: 10,
+    },
+    companyText: {
+        width: 200,
+    },
+    companyName: {
+        fontSize: 13,
+        fontWeight: 'bold',
+        color: '#3F6212',
+        marginBottom: 2,
+    },
+    companyAddress: {
+        fontSize: 7.5,
+        color: '#555',
+        lineHeight: 1.3,
     },
     invoiceInfo: {
         textAlign: 'right',
@@ -223,19 +242,17 @@ export function JayamenTemplate({
             <Page size="A4" style={styles.page}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+                    <View style={styles.companyBlock}>
                         <Image
                             src={getAssetPath('/assets/jayamen/logo.png')}
                             style={styles.logo}
                         />
-                        <Text style={{
-                            fontSize: 8,
-                            fontWeight: 'bold',
-                            letterSpacing: 0.5,
-                            color: '#1A2E05',
-                            marginLeft: -8,
-                            marginBottom: 6,
-                        }}>AJIBARANG</Text>
+                        <View style={styles.companyText}>
+                            <Text style={styles.companyName}>PT JAYAMEN GROUP MANDIRI</Text>
+                            <Text style={styles.companyAddress}>
+                                Jl. Puteran Lesmana RT 003 RW 011 Desa/Kelurahan Lesmana, Kec. Ajibarang, Kab. Banyumas, Jawa Tengah 53163
+                            </Text>
+                        </View>
                     </View>
                     <View style={styles.invoiceInfo}>
                         <Text style={styles.invoiceTitle}>FAKTUR</Text>
@@ -295,7 +312,7 @@ export function JayamenTemplate({
                 <View style={styles.footer}>
                     <View style={styles.paymentInfo}>
                         <Text style={styles.paymentLabel}>INFO PEMBAYARAN</Text>
-                        <Text>BNI - 0951810694</Text>
+                        <Text>BNI - 2106881961</Text>
                     </View>
 
                     <View style={styles.signatureSection}>
@@ -310,7 +327,7 @@ export function JayamenTemplate({
                             />
                         </View>
                         <View style={styles.signatureLine} />
-                        <Text style={styles.signatureName}>UMKM PURWOTO</Text>
+                        <Text style={styles.signatureName}>PT JAYAMEN GROUP MANDIRI</Text>
                         <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>
                     </View>
                 </View>

@@ -1196,7 +1196,7 @@ export function InvoiceDetailView({
                             <Input
                                 value={newSupplierName}
                                 onChange={(e) => setNewSupplierName(e.target.value)}
-                                placeholder="Contoh: UMKM PURWOTO"
+                                placeholder="Contoh: NUSANTARA FOOD"
                                 className="mt-1"
                                 autoFocus
                             />

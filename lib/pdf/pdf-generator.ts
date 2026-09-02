@@ -71,7 +71,7 @@ async function generatePDFForSupplier(
             items,
             customerName: supplierCustomerName,
         })
-    } else if (supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
+    } else if (supplier.includes('NUSANTARA') || supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
         template = SekarWijayakusumaTemplate({
             invoiceNumber,
             invoiceDate,

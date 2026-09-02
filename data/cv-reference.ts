@@ -15,13 +15,13 @@ export interface SupplierConfig {
 }
 
 export const supplierMapping: Record<string, SupplierConfig> = {
-    'UMKM PURWOTO': {
-        name: 'UMKM PURWOTO',
-        displayName: 'UMKM PURWOTO',
+    'PT JAYAMEN GROUP MANDIRI': {
+        name: 'PT JAYAMEN GROUP MANDIRI',
+        displayName: 'PT JAYAMEN GROUP MANDIRI',
         themeColor: '#84CC16', // Lime green
-        bankAccount: '0951810694',
+        bankAccount: '2106881961',
         bankName: 'BNI',
-        address: 'Ajibarang',
+        address: 'Jl. Puteran Lesmana RT 003 RW 011 Desa/Kelurahan Lesmana, Kec. Ajibarang, Kab. Banyumas, Jawa Tengah 53163',
         category: 'SEMBAKO',
     },
     'UMKM UNDI YUWONO': {
@@ -33,25 +33,25 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         address: 'Darmakradenan Ajibarang',
         category: 'BUAH',
     },
-    'CV SEKAR WIJAYAKUSUMA': {
-        name: 'CV SEKAR WIJAYAKUSUMA',
-        displayName: 'CV SEKAR WIJAYAKUSUMA',
-        themeColor: '#DC2626', // Red
-        bankAccount: '0291155789',
+    'NUSANTARA FOOD': {
+        name: 'NUSANTARA FOOD',
+        displayName: 'NUSANTARA FOOD',
+        themeColor: '#7C3F73', // Purple
+        bankAccount: '2106821810',
         bankName: 'BNI',
-        address: 'Dsun.K1, 001/008, RT.012, Kwitang, Gemeter, Kab. Banyumas',
+        address: 'Cihonje, RT 002/012 Desa/Kelurahan Cihonje, Kec. Gumelar, Kab. Banyumas, Jawa Tengah 54165',
         category: 'SAYUR & PROTEIN',
     },
-    // Sama persis dengan CV SEKAR WIJAYAKUSUMA (rekening & pemilik sama) —
-    // beberapa sheet Excel nulis nama pemilik rekening ini, bukan nama CV-nya.
-    // Pakai template Sekar (merah) juga, cuma nama di bawah ttd yang beda.
+    // Sama persis dengan NUSANTARA FOOD (rekening & pemilik sama) — beberapa
+    // sheet Excel nulis nama pemilik rekening ini, bukan nama perusahaannya.
+    // Pakai template Nusantara Food (ungu) juga, cuma nama di bawah ttd beda.
     'SUSILO WIDYONO': {
         name: 'SUSILO WIDYONO',
         displayName: 'SUSILO WIDYONO',
-        themeColor: '#DC2626', // Red, sama seperti CV Sekar Wijayakusuma
-        bankAccount: '0291155789',
+        themeColor: '#7C3F73', // Purple, sama seperti Nusantara Food
+        bankAccount: '2106821810',
         bankName: 'BNI',
-        address: 'Dsun.K1, 001/008, RT.012, Kwitang, Gemeter, Kab. Banyumas',
+        address: 'Cihonje, RT 002/012 Desa/Kelurahan Cihonje, Kec. Gumelar, Kab. Banyumas, Jawa Tengah 54165',
         category: 'SAYUR & PROTEIN',
     },
     'SRI KARYA MUKTI': {
@@ -74,21 +74,27 @@ export const supplierMapping: Record<string, SupplierConfig> = {
 
 /**
  * Helper function untuk mendapatkan config supplier berdasarkan nama
- * Support format: "UMKM PURWOTO", "0951810694 BNI", atau nomor rekening saja
+ * Support format: "PT JAYAMEN GROUP MANDIRI", "2106881961 BNI", atau nomor rekening saja
  */
 export function getSupplierConfig(supplierName: string): SupplierConfig | null {
     // Normalize supplier name (trim and uppercase)
     const normalized = supplierName.trim().toUpperCase()
 
-    // Try exact match first (untuk "UMKM PURWOTO" format)
+    // Try exact match first (untuk "PT JAYAMEN GROUP MANDIRI" format)
     if (supplierMapping[normalized]) {
         return supplierMapping[normalized]
     }
 
-    // Legacy: sheet Excel lama masih bisa pakai nama lama "CV JAYAMEN"/"JAYAMEN"
-    // sebelum ganti nama jadi UMKM PURWOTO
-    if (normalized.includes('JAYAMEN')) {
-        return supplierMapping['UMKM PURWOTO']
+    // Legacy: sheet Excel lama masih bisa pakai nama lama "CV JAYAMEN"/"JAYAMEN"/
+    // "UMKM PURWOTO" sebelum ganti nama jadi PT JAYAMEN GROUP MANDIRI
+    if (normalized.includes('JAYAMEN') || normalized.includes('PURWOTO')) {
+        return supplierMapping['PT JAYAMEN GROUP MANDIRI']
+    }
+
+    // Legacy: sheet Excel lama masih bisa pakai nama lama "CV SEKAR WIJAYAKUSUMA"
+    // sebelum ganti nama jadi NUSANTARA FOOD
+    if (normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) {
+        return supplierMapping['NUSANTARA FOOD']
     }
 
     // Try to match by account number (untuk "0951810694 BNI" format)
