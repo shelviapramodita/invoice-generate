@@ -21,7 +21,7 @@ interface SekarWijayakusumaTemplateProps {
     signatureName?: string
 }
 
-// Styles for SEKAR WIJAYAKUSUMA template (Red theme)
+// Styles for NUSANTARA FOOD template (Purple theme)
 const styles = StyleSheet.create({
     page: {
         padding: 30, // Reduced padding
@@ -34,13 +34,32 @@ const styles = StyleSheet.create({
         marginBottom: 15,
         paddingBottom: 10,
         borderBottomWidth: 3,
-        borderBottomColor: '#DC2626',
+        borderBottomColor: '#7C3F73',
         alignItems: 'flex-start', // Align to top
     },
+    companyBlock: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
     logo: {
-        width: 280, // Adjusted width to match invoice info height
-        height: 80, // Adjusted height to align from FAKTUR to TANGGAL
+        width: 55,
+        height: 55,
         objectFit: 'contain',
+        marginRight: 10,
+    },
+    companyText: {
+        width: 200,
+    },
+    companyName: {
+        fontSize: 13,
+        fontWeight: 'bold',
+        color: '#4A2545',
+        marginBottom: 2,
+    },
+    companyAddress: {
+        fontSize: 7.5,
+        color: '#555',
+        lineHeight: 1.3,
     },
     invoiceInfo: {
         textAlign: 'right',
@@ -49,7 +68,7 @@ const styles = StyleSheet.create({
         fontSize: 28, // Larger title
         fontWeight: 'bold',
         marginBottom: 4,
-        color: '#991B1B', // Dark red
+        color: '#4A2545', // Dark purple
     },
     invoiceNumber: {
         fontSize: 12,
@@ -62,7 +81,7 @@ const styles = StyleSheet.create({
     },
     customerSection: {
         marginBottom: 15,
-        backgroundColor: '#FEF2F2', // Light red background for customer info
+        backgroundColor: '#F5EEF4', // Light purple background for customer info
         padding: 8,
         borderRadius: 4,
     },
@@ -70,7 +89,7 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: 'bold',
         marginBottom: 2,
-        color: '#991B1B',
+        color: '#4A2545',
     },
     customerName: {
         fontSize: 12,
@@ -84,7 +103,7 @@ const styles = StyleSheet.create({
     },
     tableHeader: {
         flexDirection: 'row',
-        backgroundColor: '#DC2626', // Red
+        backgroundColor: '#7C3F73', // Purple
         color: '#fff',
         padding: 6, // Reduced padding
         fontWeight: 'bold',
@@ -127,7 +146,7 @@ const styles = StyleSheet.create({
         marginTop: 5,
         paddingTop: 5,
         borderTopWidth: 2,
-        borderTopColor: '#DC2626',
+        borderTopColor: '#7C3F73',
         width: 250,
     },
     totalLabel: {
@@ -140,7 +159,7 @@ const styles = StyleSheet.create({
         textAlign: 'right',
         fontSize: 14,
         fontWeight: 'bold',
-        color: '#991B1B',
+        color: '#4A2545',
     },
     footer: {
         marginTop: 20, // Reduced margin
@@ -157,7 +176,7 @@ const styles = StyleSheet.create({
     paymentLabel: {
         fontWeight: 'bold',
         marginBottom: 4,
-        color: '#DC2626',
+        color: '#7C3F73',
     },
     signatureSection: {
         alignItems: 'center',
@@ -203,7 +222,7 @@ export function SekarWijayakusumaTemplate({
     invoiceDate,
     items,
     customerName = 'SPPG Pandansari',
-    signatureName = 'CV SEKAR WIJAYAKUSUMA',
+    signatureName = 'NUSANTARA FOOD',
 }: SekarWijayakusumaTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
 
@@ -212,10 +231,18 @@ export function SekarWijayakusumaTemplate({
             <Page size="A4" style={styles.page}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <Image
-                        src={getAssetPath('/assets/sekar-wijayakusuma/logo.png')}
-                        style={styles.logo}
-                    />
+                    <View style={styles.companyBlock}>
+                        <Image
+                            src={getAssetPath('/assets/sekar-wijayakusuma/logo.png')}
+                            style={styles.logo}
+                        />
+                        <View style={styles.companyText}>
+                            <Text style={styles.companyName}>NUSANTARA FOOD</Text>
+                            <Text style={styles.companyAddress}>
+                                {'Cihonje, RT 002/012 Desa/Kelurahan Cihonje,\nKec. Gumelar, Kab. Banyumas, Jawa Tengah 54165'}
+                            </Text>
+                        </View>
+                    </View>
                     <View style={styles.invoiceInfo}>
                         <Text style={styles.invoiceTitle}>FAKTUR</Text>
                         <Text style={styles.invoiceNumber}>{invoiceNumber}</Text>
@@ -271,7 +298,7 @@ export function SekarWijayakusumaTemplate({
                 <View style={styles.footer}>
                     <View style={styles.paymentInfo}>
                         <Text style={styles.paymentLabel}>INFO PEMBAYARAN</Text>
-                        <Text>BNI - 0291155789</Text>
+                        <Text>BNI - 2106821810</Text>
                     </View>
 
                     <View style={styles.signatureSection}>
