@@ -125,9 +125,15 @@ export function FullScreenPDFPreview({
         setPreviewUrl(url)
     }
 
-    // Set initial preview when dialog opens or PDFs change
+    // Reset filter/selection state whenever a fresh batch of PDFs comes in
+    // (a new "Generate" run) so stale filterDate/selectedPdf from a previous
+    // preview session — e.g. a leftover date filter that no longer matches
+    // any group in the new batch — doesn't leak in and silently zero out
+    // the visible list.
     useEffect(() => {
-        if (open && pdfs.length > 0 && !selectedPdf) {
+        if (open && pdfs.length > 0) {
+            setFilterDate('all')
+            setCollapsedGroups(new Set())
             handleSelectPdf(pdfs[0])
         }
     }, [open, pdfs])
