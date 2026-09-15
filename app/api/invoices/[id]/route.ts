@@ -230,21 +230,25 @@ export async function PATCH(
                     total: item.total,
                 }))
 
+                // Dapur Buayan (SPPG Sikayu Buayan) minta invoice tanpa tanda
+                // tangan & cap LUNAS, terlepas dari suppliernya siapa.
+                const hideSignature = !!customerName && customerName.toUpperCase().includes('BUAYAN')
+
                 let template
                 if (supplier.includes('JAYAMEN') || supplier.includes('PURWOTO')) {
-                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
+                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
                 } else if (supplier.includes('UNDI') || supplier.includes('YUWONO')) {
-                    template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
+                    template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
                 } else if (supplier.includes('NUSANTARA') || supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
-                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
+                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
                 } else if (supplier.includes('WIDYONO') || supplier.includes('WIDIYONO')) {
-                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO' })
+                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO', hideSignature })
                 } else if (supplier.includes('SRI') || supplier.includes('KARYA MUKTI')) {
-                    template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
+                    template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
                 } else if (supplier.includes('HIDAYAT')) {
-                    template = UdHidayatTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
+                    template = UdHidayatTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
                 } else {
-                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
+                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
                 }
 
                 const pdfBlob = await pdf(template).toBlob()

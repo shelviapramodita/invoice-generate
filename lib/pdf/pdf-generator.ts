@@ -54,6 +54,10 @@ async function generatePDFForSupplier(
     // Use per-supplier customerName if available, otherwise use global customerName
     const supplierCustomerName = customerNames?.[supplier] || customerName
 
+    // Dapur Buayan (SPPG Sikayu Buayan) minta invoice tanpa tanda tangan & cap
+    // LUNAS, terlepas dari suppliernya siapa — dikenali dari nama customer.
+    const hideSignature = !!supplierCustomerName && supplierCustomerName.toUpperCase().includes('BUAYAN')
+
     let template
 
     // Select appropriate template based on supplier
@@ -63,6 +67,7 @@ async function generatePDFForSupplier(
             invoiceDate,
             items,
             customerName: supplierCustomerName,
+            hideSignature,
         })
     } else if (supplier.includes('UNDI') || supplier.includes('YUWONO')) {
         template = UndiYuwonoTemplate({
@@ -70,6 +75,7 @@ async function generatePDFForSupplier(
             invoiceDate,
             items,
             customerName: supplierCustomerName,
+            hideSignature,
         })
     } else if (supplier.includes('NUSANTARA') || supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
         template = SekarWijayakusumaTemplate({
@@ -77,6 +83,7 @@ async function generatePDFForSupplier(
             invoiceDate,
             items,
             customerName: supplierCustomerName,
+            hideSignature,
         })
     } else if (supplier.includes('WIDYONO') || supplier.includes('WIDIYONO')) {
         // Sama seperti CV Sekar Wijayakusuma (rekening & template sama persis),
@@ -87,6 +94,7 @@ async function generatePDFForSupplier(
             items,
             customerName: supplierCustomerName,
             signatureName: 'SUSILO WIDYONO',
+            hideSignature,
         })
     } else if (supplier.includes('SRI') || supplier.includes('KARYA MUKTI')) {
         template = SriKaryaMuktiTemplate({
@@ -94,6 +102,7 @@ async function generatePDFForSupplier(
             invoiceDate,
             items,
             customerName: supplierCustomerName,
+            hideSignature,
         })
     } else if (supplier.includes('HIDAYAT')) {
         template = UdHidayatTemplate({
@@ -101,6 +110,7 @@ async function generatePDFForSupplier(
             invoiceDate,
             items,
             customerName: supplierCustomerName,
+            hideSignature,
         })
     } else {
         // Default to Jayamen template if supplier not recognized
@@ -109,6 +119,7 @@ async function generatePDFForSupplier(
             invoiceDate,
             items,
             customerName: supplierCustomerName,
+            hideSignature,
         })
     }
 

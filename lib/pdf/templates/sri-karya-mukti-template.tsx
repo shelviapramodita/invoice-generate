@@ -15,6 +15,9 @@ interface SriKaryaMuktiTemplateProps {
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
+    // Beberapa customer (mis. Dapur Buayan) minta invoice tanpa gambar tanda
+    // tangan & cap LUNAS. Garis dan nama tetap tercetak seperti biasa.
+    hideSignature?: boolean
 }
 
 // Styles for SRI KARYA MUKTI template (Orange theme)
@@ -231,6 +234,7 @@ export function SriKaryaMuktiTemplate({
     invoiceDate,
     items,
     customerName = 'SPPG Pandansari',
+    hideSignature = false,
 }: SriKaryaMuktiTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
 
@@ -313,16 +317,18 @@ export function SriKaryaMuktiTemplate({
                     </View>
 
                     <View style={styles.signatureSection}>
-                        <View style={styles.signatureRow}>
-                            <Image
-                                src={getAssetPath('/assets/sri-karya-mukti/signature.png')}
-                                style={styles.signature}
-                            />
-                            <Image
-                                src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                style={styles.stamp}
-                            />
-                        </View>
+                        {!hideSignature && (
+                            <View style={styles.signatureRow}>
+                                <Image
+                                    src={getAssetPath('/assets/sri-karya-mukti/signature.png')}
+                                    style={styles.signature}
+                                />
+                                <Image
+                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
+                                    style={styles.stamp}
+                                />
+                            </View>
+                        )}
                         <View style={styles.signatureLine} />
                         <Text style={styles.signatureName}>SRI KARYA MUKTI</Text>
                         <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>
