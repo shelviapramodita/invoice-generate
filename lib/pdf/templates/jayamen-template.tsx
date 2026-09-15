@@ -22,6 +22,9 @@ interface JayamenTemplateProps {
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
+    // Beberapa customer (mis. Dapur Buayan) minta invoice tanpa gambar tanda
+    // tangan & cap LUNAS. Garis dan nama tetap tercetak seperti biasa.
+    hideSignature?: boolean
 }
 
 // Styles for JAYAMEN template (Green theme)
@@ -234,6 +237,7 @@ export function JayamenTemplate({
     invoiceDate,
     items,
     customerName = 'SPPG Pandansari',
+    hideSignature = false,
 }: JayamenTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
 
@@ -316,16 +320,18 @@ export function JayamenTemplate({
                     </View>
 
                     <View style={styles.signatureSection}>
-                        <View style={styles.signatureRow}>
-                            <Image
-                                src={getAssetPath('/assets/jayamen/signature.png')}
-                                style={styles.signature}
-                            />
-                            <Image
-                                src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                style={styles.stamp}
-                            />
-                        </View>
+                        {!hideSignature && (
+                            <View style={styles.signatureRow}>
+                                <Image
+                                    src={getAssetPath('/assets/jayamen/signature.png')}
+                                    style={styles.signature}
+                                />
+                                <Image
+                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
+                                    style={styles.stamp}
+                                />
+                            </View>
+                        )}
                         <View style={styles.signatureLine} />
                         <Text style={styles.signatureName}>PT JAYAMEN GROUP MANDIRI</Text>
                         <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>

@@ -19,6 +19,9 @@ interface SekarWijayakusumaTemplateProps {
     // supplier ini atas nama pemilik rekening ("SUSILO WIDYONO") bukan nama
     // CV-nya, tapi logo/header/info pembayaran tetap sama persis.
     signatureName?: string
+    // Beberapa customer (mis. Dapur Buayan) minta invoice tanpa gambar tanda
+    // tangan & cap LUNAS. Garis dan nama tetap tercetak seperti biasa.
+    hideSignature?: boolean
 }
 
 // Styles for NUSANTARA FOOD template (Purple theme)
@@ -223,6 +226,7 @@ export function SekarWijayakusumaTemplate({
     items,
     customerName = 'SPPG Pandansari',
     signatureName = 'NUSANTARA FOOD',
+    hideSignature = false,
 }: SekarWijayakusumaTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
 
@@ -302,16 +306,18 @@ export function SekarWijayakusumaTemplate({
                     </View>
 
                     <View style={styles.signatureSection}>
-                        <View style={styles.signatureRow}>
-                            <Image
-                                src={getAssetPath('/assets/sekar-wijayakusuma/signature.png')}
-                                style={styles.signature}
-                            />
-                            <Image
-                                src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                style={styles.stamp}
-                            />
-                        </View>
+                        {!hideSignature && (
+                            <View style={styles.signatureRow}>
+                                <Image
+                                    src={getAssetPath('/assets/sekar-wijayakusuma/signature.png')}
+                                    style={styles.signature}
+                                />
+                                <Image
+                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
+                                    style={styles.stamp}
+                                />
+                            </View>
+                        )}
                         <View style={styles.signatureLine} />
                         <Text style={styles.signatureName}>{signatureName}</Text>
                         <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>

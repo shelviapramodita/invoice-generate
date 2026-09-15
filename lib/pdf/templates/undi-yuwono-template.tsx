@@ -15,6 +15,9 @@ interface UndiYuwonoTemplateProps {
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
+    // Beberapa customer (mis. Dapur Buayan) minta invoice tanpa gambar tanda
+    // tangan & cap LUNAS. Garis dan nama tetap tercetak seperti biasa.
+    hideSignature?: boolean
 }
 
 // Styles for UNDI YUWONO template (Gray/Neutral theme)
@@ -216,6 +219,7 @@ export function UndiYuwonoTemplate({
     invoiceDate,
     items,
     customerName = 'SPPG PANDANSARI',
+    hideSignature = false,
 }: UndiYuwonoTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
 
@@ -288,16 +292,18 @@ export function UndiYuwonoTemplate({
                     </View>
 
                     <View style={styles.signatureSection}>
-                        <View style={styles.signatureRow}>
-                            <Image
-                                src={getAssetPath('/assets/undi-yuwono/signature.png')}
-                                style={styles.signature}
-                            />
-                            <Image
-                                src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                style={styles.stamp}
-                            />
-                        </View>
+                        {!hideSignature && (
+                            <View style={styles.signatureRow}>
+                                <Image
+                                    src={getAssetPath('/assets/undi-yuwono/signature.png')}
+                                    style={styles.signature}
+                                />
+                                <Image
+                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
+                                    style={styles.stamp}
+                                />
+                            </View>
+                        )}
                         <View style={styles.signatureLine} />
                         <Text style={styles.signatureName}>UMKM UNDI YUWONO</Text>
                         <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>
