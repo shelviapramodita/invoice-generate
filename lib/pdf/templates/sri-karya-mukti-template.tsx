@@ -200,6 +200,7 @@ const styles = StyleSheet.create({
         gap: 15,
         width: '100%',
         marginBottom: 2,
+        minHeight: 50,
     },
     stamp: {
         width: 50,
@@ -317,18 +318,20 @@ export function SriKaryaMuktiTemplate({
                     </View>
 
                     <View style={styles.signatureSection}>
-                        {!hideSignature && (
-                            <View style={styles.signatureRow}>
-                                <Image
-                                    src={getAssetPath('/assets/sri-karya-mukti/signature.png')}
-                                    style={styles.signature}
-                                />
-                                <Image
-                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                    style={styles.stamp}
-                                />
-                            </View>
-                        )}
+                        <View style={styles.signatureRow}>
+                            {!hideSignature && (
+                                <>
+                                    <Image
+                                        src={getAssetPath('/assets/sri-karya-mukti/signature.png')}
+                                        style={styles.signature}
+                                    />
+                                    <Image
+                                        src={getAssetPath('/assets/common/stamp-lunas.png')}
+                                        style={styles.stamp}
+                                    />
+                                </>
+                            )}
+                        </View>
                         <View style={styles.signatureLine} />
                         <Text style={styles.signatureName}>SRI KARYA MUKTI</Text>
                         <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>
