@@ -314,7 +314,7 @@ export function UdHidayatTemplate({
                 <View style={styles.footer}>
                     <View style={styles.paymentInfo}>
                         <Text style={styles.paymentLabel}>INFO PEMBAYARAN</Text>
-                        <Text>BNI - 2051544265</Text>
+                        <Text>BNI - 6419855552</Text>
                     </View>
 
                     <View style={styles.signatureSection}>

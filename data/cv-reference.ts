@@ -28,7 +28,7 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         name: 'UMKM UNDI YUWONO',
         displayName: 'UMKM UNDI YUWONO',
         themeColor: '#71717A', // Neutral gray
-        bankAccount: '0330250705',
+        bankAccount: '2109717169',
         bankName: 'BNI',
         address: 'Darmakradenan Ajibarang',
         category: 'BUAH',
@@ -66,7 +66,7 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         name: 'UD HIDAYAT',
         displayName: 'UD HIDAYAT',
         themeColor: '#0284C7', // Sky Blue
-        bankAccount: '2051544265',
+        bankAccount: '6419855552',
         bankName: 'BNI',
         address: 'RT 03/RW 06, Desa Karang Lewas Kidul, Desa/Kelurahan Karanglewas Kidul, Kec. Karanglewas, Kab. Banyumas, Jawa Tengah. Kode Pos : 53161',
     },

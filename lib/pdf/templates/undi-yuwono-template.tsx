@@ -289,7 +289,7 @@ export function UndiYuwonoTemplate({
                 <View style={styles.footer}>
                     <View style={styles.paymentInfo}>
                         <Text style={styles.paymentLabel}>Info Pembayaran</Text>
-                        <Text>BNI 0330250705</Text>
+                        <Text>BNI 2109717169</Text>
                     </View>
 
                     <View style={styles.signatureSection}>
