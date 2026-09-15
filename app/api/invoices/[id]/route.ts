@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getInvoiceById, deleteInvoiceHistory } from '@/lib/db/queries'
 import { createClient } from '@/lib/supabase/server'
+import { shouldHideSignature } from '@/lib/pdf/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -230,9 +231,9 @@ export async function PATCH(
                     total: item.total,
                 }))
 
-                // Dapur Buayan (SPPG Sikayu Buayan) minta invoice tanpa tanda
-                // tangan & cap LUNAS, terlepas dari suppliernya siapa.
-                const hideSignature = !!customerName && customerName.toUpperCase().includes('BUAYAN')
+                // Dapur Buayan (SPPG Sikayu Buayan): tanpa ttd & cap LUNAS
+                // mulai tanggal tertentu, invoice sebelum itu tetap pakai ttd.
+                const hideSignature = shouldHideSignature(customerName, invoiceDateParsed)
 
                 let template
                 if (supplier.includes('JAYAMEN') || supplier.includes('PURWOTO')) {
