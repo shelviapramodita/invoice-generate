@@ -90,3 +90,17 @@ export function getNextInvoiceNumber(): string {
 export function resetSequence(start: number = 1) {
     currentSequence = start
 }
+
+/**
+ * Dapur Buayan (SPPG Sikayu Buayan) awalnya minta SEMUA invoice tanpa tanda
+ * tangan & cap LUNAS, tapi ternyata invoice sebelum tanggal ini masih perlu
+ * ttd basah (sudah kadung di-generate/dikirim dengan ttd). Jadi aturannya
+ * per-tanggal: sebelum cutoff → tetap ada ttd, mulai cutoff → tanpa ttd.
+ * Ubah tanggal ini kalau kebijakannya berubah lagi.
+ */
+const BUAYAN_NO_SIGNATURE_FROM = '2026-09-12'
+
+export function shouldHideSignature(customerName: string | undefined, invoiceDate: Date): boolean {
+    if (!customerName || !customerName.toUpperCase().includes('BUAYAN')) return false
+    return format(invoiceDate, 'yyyy-MM-dd') >= BUAYAN_NO_SIGNATURE_FROM
+}

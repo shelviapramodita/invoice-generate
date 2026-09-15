@@ -2,7 +2,7 @@ import { pdf } from '@react-pdf/renderer'
 import JSZip from 'jszip'
 import { format } from 'date-fns'
 import { ParsedExcelData, InvoiceItemForm, InvoiceSummary } from '@/types'
-import { getNextInvoiceNumber } from './utils'
+import { getNextInvoiceNumber, shouldHideSignature } from './utils'
 import { JayamenTemplate } from './templates/jayamen-template'
 import { UndiYuwonoTemplate } from './templates/undi-yuwono-template'
 import { SekarWijayakusumaTemplate } from './templates/sekar-wijayakusuma-template'
@@ -54,9 +54,9 @@ async function generatePDFForSupplier(
     // Use per-supplier customerName if available, otherwise use global customerName
     const supplierCustomerName = customerNames?.[supplier] || customerName
 
-    // Dapur Buayan (SPPG Sikayu Buayan) minta invoice tanpa tanda tangan & cap
-    // LUNAS, terlepas dari suppliernya siapa — dikenali dari nama customer.
-    const hideSignature = !!supplierCustomerName && supplierCustomerName.toUpperCase().includes('BUAYAN')
+    // Dapur Buayan (SPPG Sikayu Buayan): tanpa ttd & cap LUNAS mulai tanggal
+    // tertentu, invoice sebelum itu tetap pakai ttd. Lihat shouldHideSignature.
+    const hideSignature = shouldHideSignature(supplierCustomerName, invoiceDate)
 
     let template
 
