@@ -235,18 +235,23 @@ export async function PATCH(
                 // mulai tanggal tertentu, invoice sebelum itu tetap pakai ttd.
                 const hideSignature = shouldHideSignature(customerName, invoiceDateParsed)
 
+                // Case-insensitive: `supplier` may be a raw Excel value in any
+                // casing, so match on this instead of relying on it already
+                // being uppercase.
+                const supplierKey = supplier.toUpperCase()
+
                 let template
-                if (supplier.includes('JAYAMEN') || supplier.includes('PURWOTO')) {
+                if (supplierKey.includes('JAYAMEN') || supplierKey.includes('PURWOTO')) {
                     template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
-                } else if (supplier.includes('UNDI') || supplier.includes('YUWONO')) {
+                } else if (supplierKey.includes('UNDI') || supplierKey.includes('YUWONO')) {
                     template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
-                } else if (supplier.includes('NUSANTARA') || supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
+                } else if (supplierKey.includes('NUSANTARA') || supplierKey.includes('SEKAR') || supplierKey.includes('WIJAYAKUSUMA')) {
                     template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
-                } else if (supplier.includes('WIDYONO') || supplier.includes('WIDIYONO')) {
+                } else if (supplierKey.includes('WIDYONO') || supplierKey.includes('WIDIYONO')) {
                     template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO', hideSignature })
-                } else if (supplier.includes('SRI') || supplier.includes('KARYA MUKTI')) {
+                } else if (supplierKey.includes('SRI') || supplierKey.includes('KARYA MUKTI')) {
                     template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
-                } else if (supplier.includes('HIDAYAT')) {
+                } else if (supplierKey.includes('HIDAYAT')) {
                     template = UdHidayatTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
                 } else {
                     template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })

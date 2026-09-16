@@ -143,9 +143,9 @@ export function normalizeSupplierName(supplierName: string): string {
     // supaya tetap jadi identitas sendiri (template & rekening sama, tapi
     // nama tercetak beda).
     if (normalized.includes('WIDYONO') || normalized.includes('WIDIYONO')) return 'SUSILO WIDYONO'
-    // Nama lama "CV SEKAR WIJAYAKUSUMA" sebelum ganti jadi Nusantara Food
-    // tetap dikenali (backward-compat)
-    if (normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
+    // "NUSANTARA" (nama baru) dan nama lama "CV SEKAR WIJAYAKUSUMA" (sebelum
+    // rebrand) sama-sama dikenali sebagai identitas yang sama
+    if (normalized.includes('NUSANTARA') || normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
     if (normalized.includes('SRI') || normalized.includes('KARYA MUKTI')) return 'SRI KARYA MUKTI'
     if (normalized.includes('HIDAYAT')) return 'UD HIDAYAT'
 

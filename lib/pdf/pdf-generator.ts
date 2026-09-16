@@ -60,8 +60,14 @@ async function generatePDFForSupplier(
 
     let template
 
+    // Case-insensitive: supplier may come straight from a raw Excel cell
+    // (any casing) if normalizeSupplierName doesn't yet know a given keyword —
+    // match on this instead of `supplier` so routing never silently falls
+    // through to the default template just because of letter casing.
+    const supplierKey = supplier.toUpperCase()
+
     // Select appropriate template based on supplier
-    if (supplier.includes('JAYAMEN') || supplier.includes('PURWOTO')) {
+    if (supplierKey.includes('JAYAMEN') || supplierKey.includes('PURWOTO')) {
         template = JayamenTemplate({
             invoiceNumber,
             invoiceDate,
@@ -69,7 +75,7 @@ async function generatePDFForSupplier(
             customerName: supplierCustomerName,
             hideSignature,
         })
-    } else if (supplier.includes('UNDI') || supplier.includes('YUWONO')) {
+    } else if (supplierKey.includes('UNDI') || supplierKey.includes('YUWONO')) {
         template = UndiYuwonoTemplate({
             invoiceNumber,
             invoiceDate,
@@ -77,7 +83,7 @@ async function generatePDFForSupplier(
             customerName: supplierCustomerName,
             hideSignature,
         })
-    } else if (supplier.includes('NUSANTARA') || supplier.includes('SEKAR') || supplier.includes('WIJAYAKUSUMA')) {
+    } else if (supplierKey.includes('NUSANTARA') || supplierKey.includes('SEKAR') || supplierKey.includes('WIJAYAKUSUMA')) {
         template = SekarWijayakusumaTemplate({
             invoiceNumber,
             invoiceDate,
@@ -85,7 +91,7 @@ async function generatePDFForSupplier(
             customerName: supplierCustomerName,
             hideSignature,
         })
-    } else if (supplier.includes('WIDYONO') || supplier.includes('WIDIYONO')) {
+    } else if (supplierKey.includes('WIDYONO') || supplierKey.includes('WIDIYONO')) {
         // Sama seperti CV Sekar Wijayakusuma (rekening & template sama persis),
         // cuma nama yang tercetak di bawah ttd yang beda
         template = SekarWijayakusumaTemplate({
@@ -96,7 +102,7 @@ async function generatePDFForSupplier(
             signatureName: 'SUSILO WIDYONO',
             hideSignature,
         })
-    } else if (supplier.includes('SRI') || supplier.includes('KARYA MUKTI')) {
+    } else if (supplierKey.includes('SRI') || supplierKey.includes('KARYA MUKTI')) {
         template = SriKaryaMuktiTemplate({
             invoiceNumber,
             invoiceDate,
@@ -104,7 +110,7 @@ async function generatePDFForSupplier(
             customerName: supplierCustomerName,
             hideSignature,
         })
-    } else if (supplier.includes('HIDAYAT')) {
+    } else if (supplierKey.includes('HIDAYAT')) {
         template = UdHidayatTemplate({
             invoiceNumber,
             invoiceDate,
