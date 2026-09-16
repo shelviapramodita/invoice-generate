@@ -333,8 +333,12 @@ export function UdHidayatTemplate({
                             )}
                         </View>
                         <View style={styles.signatureLine} />
-                        <Text style={styles.signatureName}>UD HIDAYAT</Text>
-                        <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>
+                        {!hideSignature && (
+                            <>
+                                <Text style={styles.signatureName}>UD HIDAYAT</Text>
+                                <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>
+                            </>
+                        )}
                     </View>
                 </View>
             </Page>

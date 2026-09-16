@@ -336,8 +336,12 @@ export function JayamenTemplate({
                             )}
                         </View>
                         <View style={styles.signatureLine} />
-                        <Text style={styles.signatureName}>PT JAYAMEN GROUP MANDIRI</Text>
-                        <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>
+                        {!hideSignature && (
+                            <>
+                                <Text style={styles.signatureName}>PT JAYAMEN GROUP MANDIRI</Text>
+                                <Text style={styles.signatureDate}>{formatDate(invoiceDate)}</Text>
+                            </>
+                        )}
                     </View>
                 </View>
             </Page>
