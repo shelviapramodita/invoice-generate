@@ -248,6 +248,55 @@ function findHeaderAndCreateMapping(rawRows: unknown[][]): { headerRowIndex: num
     return null
 }
 
+// Column order used by every sheet we've seen that DOES have a header row:
+// NO, URAIAN, QTY, HARGA, SATUAN, TOTAL, SUPPLIER. Some sheets (e.g. "TAHAP 2"
+// continuation sheets) skip the header row entirely and jump straight from a
+// category title into data in this same order — so instead of failing to
+// parse, try this fixed layout and only accept it if the numbers actually
+// check out (QTY × HARGA ≈ TOTAL) for real rows, so we don't silently
+// misparse a sheet that's shaped differently.
+const DEFAULT_COLUMN_MAP: Record<string, number> = {
+    URAIAN: 1, QTY: 2, HARGA: 3, SATUAN: 4, TOTAL: 5, SUPPLIER: 6,
+}
+
+function tryDefaultColumnMapping(rawRows: unknown[][]): { headerRowIndex: number; columnMap: Record<string, number> } | null {
+    let checked = 0
+    let matched = 0
+
+    for (let i = 0; i < rawRows.length && checked < 20; i++) {
+        const row = rawRows[i]
+        if (!row) continue
+
+        const uraian = row[DEFAULT_COLUMN_MAP.URAIAN]
+        const qty = row[DEFAULT_COLUMN_MAP.QTY]
+        const harga = row[DEFAULT_COLUMN_MAP.HARGA]
+        const total = row[DEFAULT_COLUMN_MAP.TOTAL]
+
+        // Only count rows that look like real item rows under this guess
+        if (typeof uraian !== 'string' || !uraian.trim()) continue
+        if (typeof qty !== 'number' || typeof harga !== 'number' || typeof total !== 'number') continue
+        if (total === 0) continue
+
+        checked++
+        const expected = qty * harga
+        // Allow small rounding slack (2% or 5, whichever is larger)
+        if (Math.abs(expected - total) <= Math.max(5, total * 0.02)) {
+            matched++
+        }
+    }
+
+    // Require a handful of confirmed rows, and that almost all of them check
+    // out, before trusting the guessed layout.
+    if (checked >= 2 && matched / checked >= 0.8) {
+        // headerRowIndex -1 means "no header row to skip" — data scan starts
+        // at row 0. Category-title rows like "BUAH JERUK MEDAN ..." are
+        // still filtered out by the existing shouldSkipRow() check.
+        return { headerRowIndex: -1, columnMap: DEFAULT_COLUMN_MAP }
+    }
+
+    return null
+}
+
 function parseCellToNumber(value: unknown): number {
     if (typeof value === 'number') return value
     if (value === null || value === undefined || value === '') return 0
@@ -396,8 +445,11 @@ function parseWorksheetRows(rawRows: unknown[][]): ParseResult {
             }
         }
 
-        // Find header row and create column mapping
-        const headerResult = findHeaderAndCreateMapping(rawRows)
+        // Find header row and create column mapping. If there's no header row
+        // at all (e.g. a "TAHAP 2" continuation sheet copy-pasted straight
+        // from data rows), fall back to the standard column layout — but only
+        // if the numbers actually check out.
+        const headerResult = findHeaderAndCreateMapping(rawRows) || tryDefaultColumnMapping(rawRows)
 
         if (!headerResult) {
             return {
