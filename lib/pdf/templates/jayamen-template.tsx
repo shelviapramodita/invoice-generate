@@ -335,7 +335,7 @@ export function JayamenTemplate({
                                 </>
                             )}
                         </View>
-                        <View style={styles.signatureLine} />
+                        {!hideSignature && <View style={styles.signatureLine} />}
                         {!hideSignature && (
                             <>
                                 <Text style={styles.signatureName}>PT JAYAMEN GROUP MANDIRI</Text>

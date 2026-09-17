@@ -307,7 +307,7 @@ export function UndiYuwonoTemplate({
                                 </>
                             )}
                         </View>
-                        <View style={styles.signatureLine} />
+                        {!hideSignature && <View style={styles.signatureLine} />}
                         {!hideSignature && (
                             <>
                                 <Text style={styles.signatureName}>UMKM UNDI YUWONO</Text>

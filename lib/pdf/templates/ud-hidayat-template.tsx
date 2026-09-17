@@ -332,7 +332,7 @@ export function UdHidayatTemplate({
                                 </>
                             )}
                         </View>
-                        <View style={styles.signatureLine} />
+                        {!hideSignature && <View style={styles.signatureLine} />}
                         {!hideSignature && (
                             <>
                                 <Text style={styles.signatureName}>UD HIDAYAT</Text>
