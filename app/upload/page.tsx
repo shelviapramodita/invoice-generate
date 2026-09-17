@@ -47,16 +47,18 @@ interface GeneratedPDFEntry {
 
 /**
  * Build the auto-detected batch name for a sheet.
- * Format: "Kwitansi SPPG <Name> - [<Category> ]DD/MM/YYYY"
+ * Format: "Kwitansi SPPG <Name> - [<Category> ]DD/MM/YYYY[ (Tahap N)]"
  *   "RAB SPPG Tambak.xlsx" + "8 APRIL 2026 DONE" → "Kwitansi SPPG Tambak - 08/04/2026"
  *   "RAB SPPG Tambak.xlsx" + "OPS 8 APRIL 2026" → "Kwitansi SPPG Tambak - Operasional 08/04/2026"
  *   "RAB SPPG Tambak.xlsx" + "OPS GALON 8 APRIL 2026" → "Kwitansi SPPG Tambak - Operasional Galon 08/04/2026"
+ *   "RAB SPPG Buayan.xlsx" + "7 SEPTEMBER TAHAP 2" → "Kwitansi SPPG Buayan - 07/09/2026 (Tahap 2)"
  */
-function defaultBatchName(date: Date, sppgName: string, category?: SheetCategory): string {
+function defaultBatchName(date: Date, sppgName: string, category?: SheetCategory, tahap?: number): string {
     const dateStr = format(date, 'dd/MM/yyyy')
     const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
     const categoryStr = category ? `${CATEGORY_LABELS[category]} ` : ''
-    return `Kwitansi ${sppg} - ${categoryStr}${dateStr}`
+    const tahapStr = tahap ? ` (Tahap ${tahap})` : ''
+    return `Kwitansi ${sppg} - ${categoryStr}${dateStr}${tahapStr}`
 }
 
 /** Format an integer into "#KWITANSI0001"-style invoice number (4-digit zero-padded). */
@@ -86,7 +88,7 @@ function buildSheetConfig(sheet: SheetEntry, sppgName: string): SheetConfig {
     })
     return {
         invoiceDate: date,
-        batchName: defaultBatchName(date, sppgName, sheet.category),
+        batchName: defaultBatchName(date, sppgName, sheet.category, sheet.tahap),
         invoiceNumbers: numbers,
         customerNames: customers,
     }
@@ -137,7 +139,7 @@ export default function UploadPage() {
                 const sheet = sheets.find(s => s.sheetName === sheetName)
                 if (!sheet) return
                 const cfg = updated[sheetName]
-                const newBatchName = defaultBatchName(cfg.invoiceDate, sppgName, sheet.category)
+                const newBatchName = defaultBatchName(cfg.invoiceDate, sppgName, sheet.category, sheet.tahap)
                 const newCustomer = sppgName ? `SPPG ${sppgName}` : ''
                 const newCustomerNames: Record<string, string> = {}
                 Object.keys(cfg.customerNames).forEach(supplier => {
@@ -553,7 +555,7 @@ export default function UploadPage() {
                                                                 if (!date) return
                                                                 updateConfig(previewSheet.sheetName, {
                                                                     invoiceDate: date,
-                                                                    batchName: defaultBatchName(date, sppgName, previewSheet.category),
+                                                                    batchName: defaultBatchName(date, sppgName, previewSheet.category, previewSheet.tahap),
                                                                 })
                                                             }}
                                                             initialFocus
