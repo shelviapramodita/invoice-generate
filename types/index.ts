@@ -93,6 +93,7 @@ export interface SheetEntry {
     dateRangeEnd?: string // ISO — for multi-day
     label: string // human-readable label, e.g. "21 Jan 2026" or "9–13 Nov"
     category?: SheetCategory // OPS / OPS Galon prefix detected from sheet name
+    tahap?: number // "TAHAP N" (delivery phase) detected from sheet name, e.g. 2
     data?: ParsedExcelData
     totalItems: number
     grandTotal: number

@@ -53,6 +53,7 @@ export function parseSheetName(name: string, fallbackYear?: number): {
     dateRangeEnd?: Date
     label: string
     category?: SheetCategory
+    tahap?: number
 } {
     // Detect category from sheet name BEFORE stripping. "OPS GALON" must be checked
     // before standalone "OPS" to avoid matching the prefix and leaving "GALON" behind.
@@ -66,6 +67,7 @@ export function parseSheetName(name: string, fallbackYear?: number): {
     // label suffix so two sheets sharing a date (Tahap 1 vs Tahap 2) stay
     // visually distinct instead of both collapsing into the same "7 Sep 2026".
     const tahapMatch = upperRaw.match(/\bTAHAP\s*(\d+)\b/)
+    const tahap = tahapMatch ? parseInt(tahapMatch[1], 10) : undefined
     const tahapSuffix = tahapMatch ? ` (Tahap ${tahapMatch[1]})` : ''
 
     const cleaned = name
@@ -104,6 +106,7 @@ export function parseSheetName(name: string, fallbackYear?: number): {
             dateRangeEnd: end,
             label: `${d1} ${MONTH_LABELS[mo1]} – ${d2} ${MONTH_LABELS[mo2]} ${year}${tahapSuffix}`,
             category,
+            tahap,
         }
     }
 
@@ -122,6 +125,7 @@ export function parseSheetName(name: string, fallbackYear?: number): {
             dateRangeEnd: end,
             label: `${d1}–${d2} ${MONTH_LABELS[mo]} ${year}${tahapSuffix}`,
             category,
+            tahap,
         }
     }
 
@@ -137,10 +141,11 @@ export function parseSheetName(name: string, fallbackYear?: number): {
             detectedDate: date,
             label: `${d} ${MONTH_LABELS[mo]} ${year}${tahapSuffix}`,
             category,
+            tahap,
         }
     }
 
-    return { type: 'unparseable', label: name.trim() || '(no name)', category }
+    return { type: 'unparseable', label: name.trim() || '(no name)', category, tahap }
 }
 
 // Required columns for invoice data
@@ -670,6 +675,7 @@ export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResul
                     dateRangeEnd: meta.dateRangeEnd?.toISOString().split('T')[0],
                     label: meta.label,
                     category: meta.category,
+                    tahap: meta.tahap,
                     totalItems: 0,
                     grandTotal: 0,
                     error: 'Sheet kosong',
@@ -693,6 +699,7 @@ export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResul
                     dateRangeEnd: meta.dateRangeEnd?.toISOString().split('T')[0],
                     label: meta.label,
                     category: meta.category,
+                    tahap: meta.tahap,
                     totalItems: 0,
                     grandTotal: 0,
                     error: result.error,
@@ -709,6 +716,7 @@ export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResul
                 dateRangeEnd: meta.dateRangeEnd?.toISOString().split('T')[0],
                 label: meta.label,
                 category: meta.category,
+                tahap: meta.tahap,
                 data: result.data,
                 totalItems: summary.totalItems,
                 grandTotal: summary.grandTotal,
