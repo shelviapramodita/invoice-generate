@@ -321,7 +321,7 @@ export function SekarWijayakusumaTemplate({
                                 </>
                             )}
                         </View>
-                        <View style={styles.signatureLine} />
+                        {!hideSignature && <View style={styles.signatureLine} />}
                         {!hideSignature && (
                             <>
                                 <Text style={styles.signatureName}>{signatureName}</Text>
