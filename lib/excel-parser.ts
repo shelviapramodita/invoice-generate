@@ -43,6 +43,7 @@ function isPlausibleYear(y: number): boolean {
  *   "9-13 NOV DONE"          → multi-day range, Nov 9–13 (year inferred or undefined)
  *   "30 NOV - 4 DES"         → multi-day spanning months
  *   "Copy of 23-27 NOV"      → multi-day
+ *   "7 SEPTEMBER TAHAP 2"    → single-day, label "7 Sep 2026 (Tahap 2)"
  *   "2026"                   → unparseable
  */
 export function parseSheetName(name: string, fallbackYear?: number): {
@@ -60,10 +61,17 @@ export function parseSheetName(name: string, fallbackYear?: number): {
     if (/\bOPS\s+GALON\b/.test(upperRaw)) category = 'operasional-galon'
     else if (/\bOPS\b/.test(upperRaw)) category = 'operasional'
 
+    // Detect "TAHAP N" (delivery phase/batch) before stripping too — e.g.
+    // "7 SEPTEMBER TAHAP 2" for a second delivery on the same date. Kept as a
+    // label suffix so two sheets sharing a date (Tahap 1 vs Tahap 2) stay
+    // visually distinct instead of both collapsing into the same "7 Sep 2026".
+    const tahapMatch = upperRaw.match(/\bTAHAP\s*(\d+)\b/)
+    const tahapSuffix = tahapMatch ? ` (Tahap ${tahapMatch[1]})` : ''
+
     const cleaned = name
         .replace(/\(.*?\)/g, ' ')
         // Strip OPS GALON first, then standalone OPS, plus other noise tokens
-        .replace(/\b(OPS\s+GALON|OPS|DONE|done|Done|BAHAN\s*BAKU|Copy\s*of)\b/gi, ' ')
+        .replace(/\b(OPS\s+GALON|OPS|DONE|done|Done|BAHAN\s*BAKU|Copy\s*of|TAHAP\s*\d+)\b/gi, ' ')
         .replace(/\s+/g, ' ')
         .trim()
         .toUpperCase()
@@ -94,7 +102,7 @@ export function parseSheetName(name: string, fallbackYear?: number): {
             type: 'multi-day',
             dateRangeStart: start,
             dateRangeEnd: end,
-            label: `${d1} ${MONTH_LABELS[mo1]} – ${d2} ${MONTH_LABELS[mo2]} ${year}`,
+            label: `${d1} ${MONTH_LABELS[mo1]} – ${d2} ${MONTH_LABELS[mo2]} ${year}${tahapSuffix}`,
             category,
         }
     }
@@ -112,7 +120,7 @@ export function parseSheetName(name: string, fallbackYear?: number): {
             type: 'multi-day',
             dateRangeStart: start,
             dateRangeEnd: end,
-            label: `${d1}–${d2} ${MONTH_LABELS[mo]} ${year}`,
+            label: `${d1}–${d2} ${MONTH_LABELS[mo]} ${year}${tahapSuffix}`,
             category,
         }
     }
@@ -127,7 +135,7 @@ export function parseSheetName(name: string, fallbackYear?: number): {
         return {
             type: 'single-day',
             detectedDate: date,
-            label: `${d} ${MONTH_LABELS[mo]} ${year}`,
+            label: `${d} ${MONTH_LABELS[mo]} ${year}${tahapSuffix}`,
             category,
         }
     }
