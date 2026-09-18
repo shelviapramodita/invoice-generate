@@ -12,6 +12,10 @@ export interface SupplierConfig {
     bankName: string
     address?: string
     category?: string
+    // Account numbers this supplier used to have before a change — some
+    // sheets (esp. ones without a supplier name per row, only a NO REK line)
+    // still reference the old number and need to keep resolving correctly.
+    legacyBankAccounts?: string[]
 }
 
 export const supplierMapping: Record<string, SupplierConfig> = {
@@ -29,6 +33,7 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         displayName: 'UMKM UNDI YUWONO',
         themeColor: '#71717A', // Neutral gray
         bankAccount: '2109717169',
+        legacyBankAccounts: ['0330250705'],
         bankName: 'BNI',
         address: 'Darmakradenan Ajibarang',
         category: 'BUAH',
@@ -67,6 +72,7 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         displayName: 'UD HIDAYAT',
         themeColor: '#0284C7', // Sky Blue
         bankAccount: '6419855552',
+        legacyBankAccounts: ['2051544265'],
         bankName: 'BNI',
         address: 'RT 03/RW 06, Desa Karang Lewas Kidul, Desa/Kelurahan Karanglewas Kidul, Kec. Karanglewas, Kab. Banyumas, Jawa Tengah. Kode Pos : 53161',
     },
@@ -108,9 +114,13 @@ export function getSupplierConfig(supplierName: string): SupplierConfig | null {
     const accountMatch = normalized.match(/^(\d+)/)
     if (accountMatch) {
         const accountNumber = accountMatch[1]
-        // Find supplier with matching bank account
+        // Compare numerically (not string-exact) so a leading zero Excel
+        // silently drops when a "0330250705"-style account is stored as a
+        // raw number ("330250705") still matches correctly.
+        const accountNumeric = accountNumber.replace(/^0+/, '') || '0'
         for (const [key, config] of Object.entries(supplierMapping)) {
-            if (config.bankAccount === accountNumber) {
+            const candidates = [config.bankAccount, ...(config.legacyBankAccounts || [])]
+            if (candidates.some(acc => acc.replace(/^0+/, '') === accountNumeric)) {
                 return config
             }
         }
