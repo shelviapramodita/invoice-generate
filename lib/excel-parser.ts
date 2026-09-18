@@ -166,6 +166,49 @@ const SKIP_PATTERNS = [
 // Captures: (1) account number, (2) bank name
 const SUPPLIER_PATTERN = /NO\s*REK\.\s*(\d+)\s*(.+?)(?:\s*-\s*)?$/i
 
+// Some sheets write the account-info row without the "NO REK." label at
+// all — just bare cells like [null,...,null, 2051544265, "BNI", "HIDAYAT"].
+// Recognize these too by shape: a plausible account number (6-15 digits)
+// followed within a couple cells by a known bank name.
+const KNOWN_BANK_NAMES = ['BNI', 'BCA', 'BRI', 'MANDIRI', 'BSI', 'BTN', 'CIMB', 'PERMATA', 'DANAMON']
+
+function findBareAccountInfo(row: unknown[]): { accountNumber: string; bankName: string } | null {
+    for (let i = 0; i < row.length; i++) {
+        const raw = row[i]
+        if (raw === null || raw === undefined || raw === '') continue
+        const str = String(raw).trim()
+        if (!/^\d{6,15}$/.test(str)) continue
+        for (let j = i + 1; j < Math.min(row.length, i + 3); j++) {
+            const nearby = String(row[j] ?? '').trim().toUpperCase()
+            if (KNOWN_BANK_NAMES.includes(nearby)) {
+                return { accountNumber: str, bankName: nearby }
+            }
+        }
+    }
+    return null
+}
+
+/**
+ * Detect an account-info row (NO REK line) whether it uses the literal
+ * "NO REK." label in one cell, or bare account-number + bank-name cells.
+ * Returns the "<account> <bank>" string used to resolve a SupplierConfig,
+ * or null if this row isn't an account-info row at all.
+ */
+function detectAccountInfoRow(stringValues: string[], rawRow: unknown[]): string | null {
+    const noRekValue = stringValues.find(v => /NO\s*REK\./i.test(v))
+    if (noRekValue) {
+        const match = noRekValue.match(SUPPLIER_PATTERN)
+        if (match) {
+            return `${match[1].trim()} ${match[2].trim()}`
+        }
+    }
+    const bare = findBareAccountInfo(rawRow)
+    if (bare) {
+        return `${bare.accountNumber} ${bare.bankName}`
+    }
+    return null
+}
+
 // Supplier names yang sengaja diabaikan — bukan CV/UMKM asli yang perlu di-invoice-kan
 // (mis. KDMP adalah kelompok/program internal SPPG, bukan supplier eksternal)
 const IGNORED_SUPPLIERS = ['KDMP']
@@ -541,21 +584,14 @@ function parseWorksheetRows(rawRows: unknown[][]): ParseResult {
             if (!rawRow) continue
 
             const stringValues = rawRow.map(v => String(v || '').trim())
-            const noRekValue = stringValues.find(v => /NO\s*REK\./i.test(v))
-            if (noRekValue) {
-                const match = noRekValue.match(SUPPLIER_PATTERN)
-                if (match) {
-                    const accountNumber = match[1].trim()
-                    const bankName = match[2].trim()
-                    const accountAndBank = `${accountNumber} ${bankName}`
-                    
-                    // Try to find CV name from config using account number
-                    const config = getSupplierConfig(accountAndBank)
-                    const supplierName = config?.name || accountAndBank
-                    
-                    if (supplierName) {
-                        supplierLines.push({ rowIndex: i, supplier: supplierName })
-                    }
+            const accountAndBank = detectAccountInfoRow(stringValues, rawRow)
+            if (accountAndBank) {
+                // Try to find CV name from config using account number
+                const config = getSupplierConfig(accountAndBank)
+                const supplierName = config?.name || accountAndBank
+
+                if (supplierName) {
+                    supplierLines.push({ rowIndex: i, supplier: supplierName })
                 }
             }
         }
@@ -589,10 +625,9 @@ function parseWorksheetRows(rawRows: unknown[][]): ParseResult {
                 tempObj[`col${idx}`] = val
             })
 
-            // Check for "NO REK" line - skip it
+            // Check for an account-info line ("NO REK" or bare account+bank cells) - skip it
             const stringValues = rawRow.map(v => String(v || '').trim())
-            const noRekValue = stringValues.find(v => /NO\s*REK\./i.test(v))
-            if (noRekValue) {
+            if (detectAccountInfoRow(stringValues, rawRow)) {
                 skippedRows++
                 continue
             }
