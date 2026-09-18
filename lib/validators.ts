@@ -136,13 +136,13 @@ export function normalizeSupplierName(supplierName: string): string {
     // Nama lama "CV JAYAMEN"/"JAYAMEN"/"UMKM PURWOTO" sebelum ganti jadi PT
     // Jayamen Group Mandiri tetap dikenali (backward-compat)
     if (normalized.includes('JAYAMEN') || normalized.includes('PURWOTO')) return 'PT JAYAMEN GROUP MANDIRI'
-    if (normalized.includes('UNDI') || normalized.includes('YUWONO')) return 'UMKM UNDI YUWONO'
     // "SUSILO WIDYONO" adalah nama pemilik rekening Nusantara Food (dulu CV
     // Sekar Wijayakusuma) — beberapa sheet Excel nulis nama pemilik ini,
-    // bukan nama perusahaannya. Dicek duluan sebelum SEKAR/WIJAYAKUSUMA
-    // supaya tetap jadi identitas sendiri (template & rekening sama, tapi
-    // nama tercetak beda).
-    if (normalized.includes('WIDYONO') || normalized.includes('WIDIYONO')) return 'SUSILO WIDYONO'
+    // bukan nama perusahaannya. Dicek duluan sebelum UNDI/YUWONO karena
+    // beberapa sheet nulis dengan typo "SUSILO YUWONO" (bukan "WIDYONO"),
+    // yang kalau dicek YUWONO duluan malah nyasar ke UMKM Undi Yuwono.
+    if (normalized.includes('SUSILO') || normalized.includes('WIDYONO') || normalized.includes('WIDIYONO')) return 'SUSILO WIDYONO'
+    if (normalized.includes('UNDI') || normalized.includes('YUWONO')) return 'UMKM UNDI YUWONO'
     // "NUSANTARA" (nama baru) dan nama lama "CV SEKAR WIJAYAKUSUMA" (sebelum
     // rebrand) sama-sama dikenali sebagai identitas yang sama
     if (normalized.includes('NUSANTARA') || normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
