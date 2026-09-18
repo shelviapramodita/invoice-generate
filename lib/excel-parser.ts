@@ -3,6 +3,7 @@ import { ExcelRow, ParsedExcelData, InvoiceItemForm, SheetEntry, WorkbookParseRe
 import { excelRowSchema, normalizeSupplierName } from './validators'
 import { getSupplierConfig } from '@/data/cv-reference'
 import { normalizeItemName } from './text-normalizer'
+import { getSupplierTemplateKey } from './pdf/utils'
 
 interface ParseResult {
     success: boolean
@@ -208,6 +209,29 @@ function shouldSkipRow(row: Record<string, unknown>): boolean {
     return false
 }
 
+// Alternate "NOTA"-style header used by some OPS/perlengkapan sheets:
+// QYT (unit), BANYAKNYA (qty), NAMA BARANG (uraian), HARGA, JUMLAH (total),
+// KETERANGAN (supplier) — in that column order. Matched as an exact
+// whole-row signature, not generic per-cell keywords, because "JUMLAH" here
+// means TOTAL while in the standard format it means QTY.
+function tryAlternateOpsHeaderMapping(row: unknown[]): Record<string, number> | null {
+    const cells = row.map(c => String(c || '').trim().toUpperCase())
+    const find = (label: string) => cells.indexOf(label)
+
+    const satuanIdx = find('QYT')
+    const qtyIdx = find('BANYAKNYA')
+    const uraianIdx = find('NAMA BARANG')
+    const hargaIdx = find('HARGA')
+    const totalIdx = find('JUMLAH')
+    const supplierIdx = find('KETERANGAN')
+
+    if (satuanIdx === -1 || qtyIdx === -1 || uraianIdx === -1 || hargaIdx === -1 || totalIdx === -1 || supplierIdx === -1) {
+        return null
+    }
+
+    return { URAIAN: uraianIdx, QTY: qtyIdx, HARGA: hargaIdx, SATUAN: satuanIdx, TOTAL: totalIdx, SUPPLIER: supplierIdx }
+}
+
 /**
  * Find the header row and create column mapping
  */
@@ -216,29 +240,45 @@ function findHeaderAndCreateMapping(rawRows: unknown[][]): { headerRowIndex: num
         const row = rawRows[i]
         if (!row) continue
 
+        // Some "OPS" (operasional/perlengkapan, not bahan baku) sheets use a
+        // totally different header wording — "QYT, BANYAKNYA, NAMA BARANG,
+        // HARGA, JUMLAH, KETERANGAN" instead of the usual "NO, URAIAN, QTY,
+        // HARGA, SATUAN, TOTAL, SUPPLIER". Checked as a whole-row signature
+        // (not per-cell keywords) since "JUMLAH" alone would otherwise
+        // collide with its other meaning (QTY) in the standard format.
+        const altColumnMap = tryAlternateOpsHeaderMapping(row)
+        if (altColumnMap) {
+            return { headerRowIndex: i, columnMap: altColumnMap }
+        }
+
         const columnMap: Record<string, number> = {}
         let foundColumns = 0
 
+        // Some sheets have a leftover duplicate of the header (and nothing
+        // else) further along the same row, e.g. columns 0-6 then blanks
+        // then 12-18 repeating NO/URAIAN/QTY/.../SUPPLIER again. Keep the
+        // FIRST match for each column — overwriting with a later duplicate
+        // would point the mapping at empty columns and fail every data row.
         row.forEach((cell, colIndex) => {
             const cellStr = String(cell || '').trim().toUpperCase()
 
             // Match column names (with variations)
-            if (cellStr === 'URAIAN' || cellStr === 'NAMA BARANG' || cellStr === 'NAMA' || cellStr === 'ITEM') {
+            if (columnMap['URAIAN'] === undefined && (cellStr === 'URAIAN' || cellStr === 'NAMA BARANG' || cellStr === 'NAMA' || cellStr === 'ITEM')) {
                 columnMap['URAIAN'] = colIndex
                 foundColumns++
-            } else if (cellStr === 'QTY' || cellStr === 'QUANTITY' || cellStr === 'JUMLAH') {
+            } else if (columnMap['QTY'] === undefined && (cellStr === 'QTY' || cellStr === 'QUANTITY' || cellStr === 'JUMLAH')) {
                 columnMap['QTY'] = colIndex
                 foundColumns++
-            } else if (cellStr === 'HARGA' || cellStr === 'HARGA SATUAN' || cellStr === 'PRICE') {
+            } else if (columnMap['HARGA'] === undefined && (cellStr === 'HARGA' || cellStr === 'HARGA SATUAN' || cellStr === 'PRICE')) {
                 columnMap['HARGA'] = colIndex
                 foundColumns++
-            } else if (cellStr === 'SATUAN' || cellStr === 'UNIT') {
+            } else if (columnMap['SATUAN'] === undefined && (cellStr === 'SATUAN' || cellStr === 'UNIT')) {
                 columnMap['SATUAN'] = colIndex
                 foundColumns++
-            } else if (cellStr === 'TOTAL' || cellStr === 'JUMLAH HARGA' || cellStr === 'SUBTOTAL') {
+            } else if (columnMap['TOTAL'] === undefined && (cellStr === 'TOTAL' || cellStr === 'JUMLAH HARGA' || cellStr === 'SUBTOTAL')) {
                 columnMap['TOTAL'] = colIndex
                 foundColumns++
-            } else if (cellStr === 'SUPPLIER' || cellStr === 'VENDOR' || cellStr === 'PEMASOK') {
+            } else if (columnMap['SUPPLIER'] === undefined && (cellStr === 'SUPPLIER' || cellStr === 'VENDOR' || cellStr === 'PEMASOK')) {
                 columnMap['SUPPLIER'] = colIndex
                 foundColumns++
             }
@@ -409,16 +449,45 @@ function parseIndonesianNumber(str: string): number {
 function transformRowToExcelRow(row: unknown[], columnMap: Record<string, number>): Partial<ExcelRow> {
     const qtyRaw = row[columnMap['QTY']]
     const qty = columnMap['QTY'] !== undefined ? parseCellToNumber(qtyRaw) : 0
-    
+
     const uraian = columnMap['URAIAN'] !== undefined ? String(row[columnMap['URAIAN']] ?? '').trim() : ''
-    
+
+    // Some sheets fill SATUAN/HARGA in the opposite physical order from what
+    // their header row's text labels claim (a recurring habit in how this
+    // business fills these sheets, not a one-off typo). Detect by type
+    // instead of trusting the header position: HARGA must be a number,
+    // SATUAN a unit string — swap if they're backwards.
+    let hargaRaw = columnMap['HARGA'] !== undefined ? row[columnMap['HARGA']] : undefined
+    let satuanRaw = columnMap['SATUAN'] !== undefined ? row[columnMap['SATUAN']] : undefined
+    if (typeof hargaRaw === 'string' && typeof satuanRaw === 'number') {
+        const swap = hargaRaw
+        hargaRaw = satuanRaw
+        satuanRaw = swap
+    }
+
+    // Some sheets insert an extra column (e.g. toko/merk asal barang) between
+    // TOTAL and SUPPLIER that isn't declared in the header, silently
+    // shifting the real supplier name one column to the right. If the
+    // mapped SUPPLIER cell doesn't match any of the 5 authorized CV/UMKM,
+    // check the columns after it in the same row for one that does.
+    let supplier = columnMap['SUPPLIER'] !== undefined ? String(row[columnMap['SUPPLIER']] ?? '').trim() : ''
+    if (supplier && columnMap['SUPPLIER'] !== undefined && !getSupplierTemplateKey(supplier)) {
+        for (let i = columnMap['SUPPLIER'] + 1; i < row.length; i++) {
+            const candidate = String(row[i] ?? '').trim()
+            if (candidate && getSupplierTemplateKey(candidate)) {
+                supplier = candidate
+                break
+            }
+        }
+    }
+
     return {
         URAIAN: uraian,
         QTY: qty,
-        HARGA: columnMap['HARGA'] !== undefined ? parseCellToNumber(row[columnMap['HARGA']]) : 0,
-        SATUAN: columnMap['SATUAN'] !== undefined ? String(row[columnMap['SATUAN']] ?? '').trim() : '',
+        HARGA: hargaRaw !== undefined ? parseCellToNumber(hargaRaw) : 0,
+        SATUAN: satuanRaw !== undefined ? String(satuanRaw ?? '').trim() : '',
         TOTAL: columnMap['TOTAL'] !== undefined ? parseCellToNumber(row[columnMap['TOTAL']]) : 0,
-        SUPPLIER: columnMap['SUPPLIER'] !== undefined ? String(row[columnMap['SUPPLIER']] ?? '').trim() : '',
+        SUPPLIER: supplier,
     }
 }
 
