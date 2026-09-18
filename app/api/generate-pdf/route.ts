@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
         }
 
         const parsedDate = new Date(invoiceDate + 'T12:00:00')
-        const pdfs = await generateInvoicePDFsWithNumbers(parsedData as ParsedExcelData, {
+        const { pdfs, unrecognizedSuppliers } = await generateInvoicePDFsWithNumbers(parsedData as ParsedExcelData, {
             invoiceDate: parsedDate,
             batchName,
             invoiceNumbers,
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        return NextResponse.json({ historyId, pdfs: pdfsData })
+        return NextResponse.json({ historyId, pdfs: pdfsData, unrecognizedSuppliers })
 
     } catch (error) {
         console.error('Error generating PDFs:', error)

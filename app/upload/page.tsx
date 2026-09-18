@@ -269,6 +269,10 @@ export default function UploadPage() {
         setProgress({ done: 0, total: selectedSheetNames.length })
 
         const allPDFs: GeneratedPDFEntry[] = []
+        // Suppliers found in the Excel data that don't match any of the 5
+        // authorized CV/UMKM — the API already skipped generating an invoice
+        // for these, we just need to tell the user which ones and where.
+        const unrecognized: string[] = []
 
         try {
             for (let i = 0; i < selectedSheetNames.length; i++) {
@@ -316,12 +320,22 @@ export default function UploadPage() {
                     })
                 })
 
+                ;(data.unrecognizedSuppliers || []).forEach((supplier: string) => {
+                    unrecognized.push(`${supplier} (${sheet.label})`)
+                })
+
                 setProgress({ done: i + 1, total: selectedSheetNames.length })
             }
 
             setGeneratedPDFs(allPDFs)
             setShowPreview(true)
             toast.success(`Berhasil generate ${allPDFs.length} PDF dari ${selectedSheetNames.length} hari`)
+            if (unrecognized.length > 0) {
+                toast.error(
+                    `${unrecognized.length} supplier tidak dikenali (bukan dari 5 CV/UMKM resmi), invoice-nya TIDAK di-generate: ${unrecognized.join(', ')}`,
+                    { duration: 15000 }
+                )
+            }
         } catch (error: any) {
             console.error('Error generating:', error)
             toast.error(error.message || 'Gagal generate PDF')

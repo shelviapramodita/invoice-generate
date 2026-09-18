@@ -104,3 +104,37 @@ export function shouldHideSignature(customerName: string | undefined, invoiceDat
     if (!customerName || !customerName.toUpperCase().includes('BUAYAN')) return false
     return format(invoiceDate, 'yyyy-MM-dd') >= BUAYAN_NO_SIGNATURE_FROM
 }
+
+/**
+ * The only 5 CV/UMKM this app is authorized to invoice, per
+ * "DATA PT DAN UMKM TERBARU" — every other supplier name that shows up in an
+ * Excel sheet (typo, unrelated text, a supplier not yet onboarded) must NOT
+ * silently turn into an invoice for one of these five. Keep this list and
+ * normalizeSupplierName() in lib/validators.ts in sync.
+ */
+export type SupplierTemplateKey =
+    | 'jayamen'
+    | 'undi-yuwono'
+    | 'nusantara-food'
+    | 'susilo-widyono'
+    | 'sri-karya-mukti'
+    | 'ud-hidayat'
+
+/**
+ * Resolve a (possibly raw, any-case) supplier string to one of the 5
+ * authorized CV/UMKM templates. Returns null when it doesn't match any of
+ * them — callers must treat that as "don't generate an invoice", not fall
+ * back to a default template.
+ */
+export function getSupplierTemplateKey(supplier: string): SupplierTemplateKey | null {
+    const key = supplier.toUpperCase()
+    if (key.includes('JAYAMEN') || key.includes('PURWOTO')) return 'jayamen'
+    if (key.includes('UNDI') || key.includes('YUWONO')) return 'undi-yuwono'
+    if (key.includes('NUSANTARA') || key.includes('SEKAR') || key.includes('WIJAYAKUSUMA')) return 'nusantara-food'
+    if (key.includes('WIDYONO') || key.includes('WIDIYONO')) return 'susilo-widyono'
+    // "Waris Ika Pujian" = nama pemilik rekening Sri Karya Mukti
+    if (key.includes('WARIS') || key.includes('PUJIAN')) return 'sri-karya-mukti'
+    if (key.includes('SRI') || key.includes('KARYA MUKTI')) return 'sri-karya-mukti'
+    if (key.includes('HIDAYAT')) return 'ud-hidayat'
+    return null
+}

@@ -2,7 +2,7 @@ import { pdf } from '@react-pdf/renderer'
 import JSZip from 'jszip'
 import { format } from 'date-fns'
 import { ParsedExcelData, InvoiceItemForm, InvoiceSummary } from '@/types'
-import { getNextInvoiceNumber, shouldHideSignature } from './utils'
+import { getNextInvoiceNumber, shouldHideSignature, getSupplierTemplateKey } from './utils'
 import { JayamenTemplate } from './templates/jayamen-template'
 import { UndiYuwonoTemplate } from './templates/undi-yuwono-template'
 import { SekarWijayakusumaTemplate } from './templates/sekar-wijayakusuma-template'
@@ -40,6 +40,19 @@ export interface GeneratedPDF {
 }
 
 /**
+ * Thrown when a supplier string doesn't match any of the 5 authorized
+ * CV/UMKM. Callers must skip that supplier and surface it, not fall back to
+ * a default template — an unrecognized name must never quietly become a
+ * real invoice for the wrong party.
+ */
+export class UnrecognizedSupplierError extends Error {
+    constructor(public readonly supplier: string) {
+        super(`Supplier tidak dikenali (bukan salah satu dari 5 CV/UMKM resmi): ${supplier}`)
+        this.name = 'UnrecognizedSupplierError'
+    }
+}
+
+/**
  * Generate PDF for a specific supplier based on supplier name
  */
 async function generatePDFForSupplier(
@@ -50,7 +63,7 @@ async function generatePDFForSupplier(
 ): Promise<GeneratedPDF> {
     const invoiceNumber = customInvoiceNumber || getNextInvoiceNumber()
     const { invoiceDate, customerName, customerNames } = options
-    
+
     // Use per-supplier customerName if available, otherwise use global customerName
     const supplierCustomerName = customerNames?.[supplier] || customerName
 
@@ -58,75 +71,70 @@ async function generatePDFForSupplier(
     // tertentu, invoice sebelum itu tetap pakai ttd. Lihat shouldHideSignature.
     const hideSignature = shouldHideSignature(supplierCustomerName, invoiceDate)
 
+    const templateKey = getSupplierTemplateKey(supplier)
+    if (!templateKey) {
+        throw new UnrecognizedSupplierError(supplier)
+    }
+
     let template
-
-    // Case-insensitive: supplier may come straight from a raw Excel cell
-    // (any casing) if normalizeSupplierName doesn't yet know a given keyword —
-    // match on this instead of `supplier` so routing never silently falls
-    // through to the default template just because of letter casing.
-    const supplierKey = supplier.toUpperCase()
-
-    // Select appropriate template based on supplier
-    if (supplierKey.includes('JAYAMEN') || supplierKey.includes('PURWOTO')) {
-        template = JayamenTemplate({
-            invoiceNumber,
-            invoiceDate,
-            items,
-            customerName: supplierCustomerName,
-            hideSignature,
-        })
-    } else if (supplierKey.includes('UNDI') || supplierKey.includes('YUWONO')) {
-        template = UndiYuwonoTemplate({
-            invoiceNumber,
-            invoiceDate,
-            items,
-            customerName: supplierCustomerName,
-            hideSignature,
-        })
-    } else if (supplierKey.includes('NUSANTARA') || supplierKey.includes('SEKAR') || supplierKey.includes('WIJAYAKUSUMA')) {
-        template = SekarWijayakusumaTemplate({
-            invoiceNumber,
-            invoiceDate,
-            items,
-            customerName: supplierCustomerName,
-            hideSignature,
-        })
-    } else if (supplierKey.includes('WIDYONO') || supplierKey.includes('WIDIYONO')) {
-        // Sama seperti CV Sekar Wijayakusuma (rekening & template sama persis),
-        // cuma nama yang tercetak di bawah ttd yang beda
-        template = SekarWijayakusumaTemplate({
-            invoiceNumber,
-            invoiceDate,
-            items,
-            customerName: supplierCustomerName,
-            signatureName: 'SUSILO WIDYONO',
-            hideSignature,
-        })
-    } else if (supplierKey.includes('SRI') || supplierKey.includes('KARYA MUKTI')) {
-        template = SriKaryaMuktiTemplate({
-            invoiceNumber,
-            invoiceDate,
-            items,
-            customerName: supplierCustomerName,
-            hideSignature,
-        })
-    } else if (supplierKey.includes('HIDAYAT')) {
-        template = UdHidayatTemplate({
-            invoiceNumber,
-            invoiceDate,
-            items,
-            customerName: supplierCustomerName,
-            hideSignature,
-        })
-    } else {
-        // Default to Jayamen template if supplier not recognized
-        template = JayamenTemplate({
-            invoiceNumber,
-            invoiceDate,
-            items,
-            customerName: supplierCustomerName,
-            hideSignature,
-        })
+    switch (templateKey) {
+        case 'jayamen':
+            template = JayamenTemplate({
+                invoiceNumber,
+                invoiceDate,
+                items,
+                customerName: supplierCustomerName,
+                hideSignature,
+            })
+            break
+        case 'undi-yuwono':
+            template = UndiYuwonoTemplate({
+                invoiceNumber,
+                invoiceDate,
+                items,
+                customerName: supplierCustomerName,
+                hideSignature,
+            })
+            break
+        case 'nusantara-food':
+            template = SekarWijayakusumaTemplate({
+                invoiceNumber,
+                invoiceDate,
+                items,
+                customerName: supplierCustomerName,
+                hideSignature,
+            })
+            break
+        case 'susilo-widyono':
+            // Sama seperti Nusantara Food (rekening & template sama persis),
+            // cuma nama yang tercetak di bawah ttd yang beda
+            template = SekarWijayakusumaTemplate({
+                invoiceNumber,
+                invoiceDate,
+                items,
+                customerName: supplierCustomerName,
+                signatureName: 'SUSILO WIDYONO',
+                hideSignature,
+            })
+            break
+        case 'sri-karya-mukti':
+            template = SriKaryaMuktiTemplate({
+                invoiceNumber,
+                invoiceDate,
+                items,
+                customerName: supplierCustomerName,
+                hideSignature,
+            })
+            break
+        case 'ud-hidayat':
+            template = UdHidayatTemplate({
+                invoiceNumber,
+                invoiceDate,
+                items,
+                customerName: supplierCustomerName,
+                hideSignature,
+            })
+            break
     }
 
     // Generate PDF blob
@@ -139,6 +147,14 @@ async function generatePDFForSupplier(
     }
 }
 
+export interface GenerateInvoicePDFsResult {
+    pdfs: GeneratedPDF[]
+    // Supplier names found in the parsed data that don't match any of the 5
+    // authorized CV/UMKM — no invoice was generated for these, the caller
+    // must surface them instead of silently dropping them.
+    unrecognizedSuppliers: string[]
+}
+
 /**
  * Generate PDFs for all suppliers from parsed Excel data
  * Returns array of PDF blobs with metadata
@@ -146,18 +162,27 @@ async function generatePDFForSupplier(
 export async function generateInvoicePDFs(
     parsedData: ParsedExcelData,
     options: PDFGenerationOptions
-): Promise<GeneratedPDF[]> {
+): Promise<GenerateInvoicePDFsResult> {
     const pdfs: GeneratedPDF[] = []
+    const unrecognizedSuppliers: string[] = []
 
     // Generate PDF for each supplier
     for (const [supplier, items] of Object.entries(parsedData)) {
         if (items && items.length > 0) {
-            const pdf = await generatePDFForSupplier(supplier, items, options)
-            pdfs.push(pdf)
+            try {
+                const pdf = await generatePDFForSupplier(supplier, items, options)
+                pdfs.push(pdf)
+            } catch (error) {
+                if (error instanceof UnrecognizedSupplierError) {
+                    unrecognizedSuppliers.push(supplier)
+                    continue
+                }
+                throw error
+            }
         }
     }
 
-    return pdfs
+    return { pdfs, unrecognizedSuppliers }
 }
 
 /**
@@ -166,20 +191,29 @@ export async function generateInvoicePDFs(
 export async function generateInvoicePDFsWithNumbers(
     parsedData: ParsedExcelData,
     options: PDFGenerationOptions
-): Promise<GeneratedPDF[]> {
+): Promise<GenerateInvoicePDFsResult> {
     const pdfs: GeneratedPDF[] = []
+    const unrecognizedSuppliers: string[] = []
     const { invoiceNumbers = {} } = options
 
     // Generate PDF for each supplier with custom number
     for (const [supplier, items] of Object.entries(parsedData)) {
         if (items && items.length > 0) {
-            const customNumber = invoiceNumbers[supplier]
-            const pdf = await generatePDFForSupplier(supplier, items, options, customNumber)
-            pdfs.push(pdf)
+            try {
+                const customNumber = invoiceNumbers[supplier]
+                const pdf = await generatePDFForSupplier(supplier, items, options, customNumber)
+                pdfs.push(pdf)
+            } catch (error) {
+                if (error instanceof UnrecognizedSupplierError) {
+                    unrecognizedSuppliers.push(supplier)
+                    continue
+                }
+                throw error
+            }
         }
     }
 
-    return pdfs
+    return { pdfs, unrecognizedSuppliers }
 }
 
 /**

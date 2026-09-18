@@ -244,7 +244,7 @@ export function SekarWijayakusumaTemplate({
                         <View style={styles.companyText}>
                             <Text style={styles.companyName}>NUSANTARA FOOD</Text>
                             <Text style={styles.companyAddress}>
-                                {'Cihonje, RT 002/012 Desa/Kelurahan Cihonje,\nKec. Gumelar, Kab. Banyumas, Jawa Tengah 54165'}
+                                {'Cihonje, RT 002/012 Desa/Kelurahan Cihonje,\nKec. Gumelar, Kab. Banyumas, Jawa Tengah 53165'}
                             </Text>
                         </View>
                     </View>
