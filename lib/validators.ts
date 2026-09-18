@@ -146,6 +146,10 @@ export function normalizeSupplierName(supplierName: string): string {
     // "NUSANTARA" (nama baru) dan nama lama "CV SEKAR WIJAYAKUSUMA" (sebelum
     // rebrand) sama-sama dikenali sebagai identitas yang sama
     if (normalized.includes('NUSANTARA') || normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
+    // "Waris Ika Pujian" adalah nama pemilik rekening Sri Karya Mukti (per
+    // data resmi PT/UMKM) — beberapa sheet Excel mungkin nulis nama pemilik
+    // ini, bukan nama usahanya.
+    if (normalized.includes('WARIS') || normalized.includes('PUJIAN')) return 'SRI KARYA MUKTI'
     if (normalized.includes('SRI') || normalized.includes('KARYA MUKTI')) return 'SRI KARYA MUKTI'
     if (normalized.includes('HIDAYAT')) return 'UD HIDAYAT'
 

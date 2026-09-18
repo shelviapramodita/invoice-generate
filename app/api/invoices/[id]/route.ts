@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getInvoiceById, deleteInvoiceHistory } from '@/lib/db/queries'
 import { createClient } from '@/lib/supabase/server'
-import { shouldHideSignature } from '@/lib/pdf/utils'
+import { shouldHideSignature, getSupplierTemplateKey } from '@/lib/pdf/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -189,6 +189,10 @@ export async function PATCH(
         if (totalsError) throw totalsError
 
         const hasDataChanges = items?.length > 0 || new_items?.length > 0 || delete_item_ids?.length > 0 || invoice_date
+        // Suppliers found among the edited items that don't match any of the
+        // 5 authorized CV/UMKM — their PDF is left as-is (not regenerated)
+        // rather than silently becoming a Jayamen invoice.
+        const unrecognizedSuppliers: string[] = []
 
         if (hasDataChanges && allItems.length > 0) {
             const { data: invoiceHistory, error: historyError } = await supabase
@@ -235,26 +239,32 @@ export async function PATCH(
                 // mulai tanggal tertentu, invoice sebelum itu tetap pakai ttd.
                 const hideSignature = shouldHideSignature(customerName, invoiceDateParsed)
 
-                // Case-insensitive: `supplier` may be a raw Excel value in any
-                // casing, so match on this instead of relying on it already
-                // being uppercase.
-                const supplierKey = supplier.toUpperCase()
+                const templateKey = getSupplierTemplateKey(supplier)
+                if (!templateKey) {
+                    unrecognizedSuppliers.push(supplier)
+                    continue
+                }
 
                 let template
-                if (supplierKey.includes('JAYAMEN') || supplierKey.includes('PURWOTO')) {
-                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
-                } else if (supplierKey.includes('UNDI') || supplierKey.includes('YUWONO')) {
-                    template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
-                } else if (supplierKey.includes('NUSANTARA') || supplierKey.includes('SEKAR') || supplierKey.includes('WIJAYAKUSUMA')) {
-                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
-                } else if (supplierKey.includes('WIDYONO') || supplierKey.includes('WIDIYONO')) {
-                    template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO', hideSignature })
-                } else if (supplierKey.includes('SRI') || supplierKey.includes('KARYA MUKTI')) {
-                    template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
-                } else if (supplierKey.includes('HIDAYAT')) {
-                    template = UdHidayatTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
-                } else {
-                    template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                switch (templateKey) {
+                    case 'jayamen':
+                        template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        break
+                    case 'undi-yuwono':
+                        template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        break
+                    case 'nusantara-food':
+                        template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        break
+                    case 'susilo-widyono':
+                        template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO', hideSignature })
+                        break
+                    case 'sri-karya-mukti':
+                        template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        break
+                    case 'ud-hidayat':
+                        template = UdHidayatTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        break
                 }
 
                 const pdfBlob = await pdf(template).toBlob()
@@ -284,7 +294,7 @@ export async function PATCH(
             }
         }
 
-        return NextResponse.json({ success: true })
+        return NextResponse.json({ success: true, unrecognizedSuppliers })
     } catch (error: any) {
         console.error('Error updating invoice:', error)
         return NextResponse.json({ error: 'Failed to update invoice' }, { status: 500 })

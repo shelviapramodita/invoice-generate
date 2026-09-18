@@ -39,7 +39,7 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         themeColor: '#7C3F73', // Purple
         bankAccount: '2106821810',
         bankName: 'BNI',
-        address: 'Cihonje, RT 002/012 Desa/Kelurahan Cihonje, Kec. Gumelar, Kab. Banyumas, Jawa Tengah 54165',
+        address: 'Cihonje, RT 002/012 Desa/Kelurahan Cihonje, Kec. Gumelar, Kab. Banyumas, Jawa Tengah 53165',
         category: 'SAYUR & PROTEIN',
     },
     // Sama persis dengan NUSANTARA FOOD (rekening & pemilik sama) — beberapa
@@ -51,7 +51,7 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         themeColor: '#7C3F73', // Purple, sama seperti Nusantara Food
         bankAccount: '2106821810',
         bankName: 'BNI',
-        address: 'Cihonje, RT 002/012 Desa/Kelurahan Cihonje, Kec. Gumelar, Kab. Banyumas, Jawa Tengah 54165',
+        address: 'Cihonje, RT 002/012 Desa/Kelurahan Cihonje, Kec. Gumelar, Kab. Banyumas, Jawa Tengah 53165',
         category: 'SAYUR & PROTEIN',
     },
     'SRI KARYA MUKTI': {
@@ -95,6 +95,12 @@ export function getSupplierConfig(supplierName: string): SupplierConfig | null {
     // sebelum ganti nama jadi NUSANTARA FOOD
     if (normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) {
         return supplierMapping['NUSANTARA FOOD']
+    }
+
+    // "Waris Ika Pujian" adalah nama pemilik rekening Sri Karya Mukti (per
+    // data resmi PT/UMKM), beberapa sheet Excel mungkin nulis nama ini
+    if (normalized.includes('WARIS') || normalized.includes('PUJIAN')) {
+        return supplierMapping['SRI KARYA MUKTI']
     }
 
     // Try to match by account number (untuk "0951810694 BNI" format)

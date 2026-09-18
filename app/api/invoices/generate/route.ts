@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
         const excelPath = await uploadExcelFile(excelFile, excelFile.name)
 
-        const pdfs = await generateInvoicePDFs(parsedData, {
+        const { pdfs, unrecognizedSuppliers } = await generateInvoicePDFs(parsedData, {
             invoiceDate,
             batchName: batchName || undefined,
         })
@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
                     invoiceNumber: pdf.invoiceNumber,
                     pdfPath: pdf.pdfPath,
                 })),
+                unrecognizedSuppliers,
             },
         })
     } catch (error: any) {
