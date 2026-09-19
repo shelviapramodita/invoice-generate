@@ -128,30 +128,41 @@ export function isValidSupplier(supplierName: string): boolean {
 }
 
 /**
+ * Sheets sometimes have doubled-letter typos in a supplier name (e.g. "UD
+ * HIIDAYAT" instead of "UD HIDAYAT"), which breaks a plain .includes()
+ * keyword check since the doubled letter isn't part of the real keyword.
+ * Collapse consecutive duplicate letters so these still resolve correctly.
+ */
+function collapseRepeatedLetters(str: string): string {
+    return str.replace(/([A-Z])\1+/g, '$1')
+}
+
+/**
  * Normalize supplier name to standard format
  */
 export function normalizeSupplierName(supplierName: string): string {
     const normalized = supplierName.trim().toUpperCase()
+    const key = collapseRepeatedLetters(normalized)
 
     // Nama lama "CV JAYAMEN"/"JAYAMEN"/"UMKM PURWOTO" sebelum ganti jadi PT
     // Jayamen Group Mandiri tetap dikenali (backward-compat)
-    if (normalized.includes('JAYAMEN') || normalized.includes('PURWOTO')) return 'PT JAYAMEN GROUP MANDIRI'
+    if (key.includes('JAYAMEN') || key.includes('PURWOTO')) return 'PT JAYAMEN GROUP MANDIRI'
     // "SUSILO WIDYONO" adalah nama pemilik rekening Nusantara Food (dulu CV
     // Sekar Wijayakusuma) — beberapa sheet Excel nulis nama pemilik ini,
     // bukan nama perusahaannya. Dicek duluan sebelum UNDI/YUWONO karena
     // beberapa sheet nulis dengan typo "SUSILO YUWONO" (bukan "WIDYONO"),
     // yang kalau dicek YUWONO duluan malah nyasar ke UMKM Undi Yuwono.
-    if (normalized.includes('SUSILO') || normalized.includes('WIDYONO') || normalized.includes('WIDIYONO')) return 'SUSILO WIDYONO'
-    if (normalized.includes('UNDI') || normalized.includes('YUWONO')) return 'UMKM UNDI YUWONO'
+    if (key.includes('SUSILO') || key.includes('WIDYONO') || key.includes('WIDIYONO')) return 'SUSILO WIDYONO'
+    if (key.includes('UNDI') || key.includes('YUWONO')) return 'UMKM UNDI YUWONO'
     // "NUSANTARA" (nama baru) dan nama lama "CV SEKAR WIJAYAKUSUMA" (sebelum
     // rebrand) sama-sama dikenali sebagai identitas yang sama
-    if (normalized.includes('NUSANTARA') || normalized.includes('SEKAR') || normalized.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
+    if (key.includes('NUSANTARA') || key.includes('SEKAR') || key.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
     // "Waris Ika Pujian" adalah nama pemilik rekening Sri Karya Mukti (per
     // data resmi PT/UMKM) — beberapa sheet Excel mungkin nulis nama pemilik
     // ini, bukan nama usahanya.
-    if (normalized.includes('WARIS') || normalized.includes('PUJIAN')) return 'SRI KARYA MUKTI'
-    if (normalized.includes('SRI') || normalized.includes('KARYA MUKTI')) return 'SRI KARYA MUKTI'
-    if (normalized.includes('HIDAYAT')) return 'UD HIDAYAT'
+    if (key.includes('WARIS') || key.includes('PUJIAN')) return 'SRI KARYA MUKTI'
+    if (key.includes('SRI') || key.includes('KARYA MUKTI')) return 'SRI KARYA MUKTI'
+    if (key.includes('HIDAYAT')) return 'UD HIDAYAT'
 
     return supplierName.trim()
 }

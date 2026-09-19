@@ -126,8 +126,18 @@ export type SupplierTemplateKey =
  * them — callers must treat that as "don't generate an invoice", not fall
  * back to a default template.
  */
+/**
+ * Sheets sometimes have doubled-letter typos in a supplier name (e.g. "UD
+ * HIIDAYAT" instead of "UD HIDAYAT"), which breaks a plain .includes()
+ * keyword check since the doubled letter isn't part of the real keyword.
+ * Collapse consecutive duplicate letters so these still resolve correctly.
+ */
+function collapseRepeatedLetters(str: string): string {
+    return str.replace(/([A-Z])\1+/g, '$1')
+}
+
 export function getSupplierTemplateKey(supplier: string): SupplierTemplateKey | null {
-    const key = supplier.toUpperCase()
+    const key = collapseRepeatedLetters(supplier.toUpperCase())
     if (key.includes('JAYAMEN') || key.includes('PURWOTO')) return 'jayamen'
     // Dicek duluan sebelum UNDI/YUWONO: beberapa sheet nulis nama ini dengan
     // typo "SUSILO YUWONO" (harusnya "SUSILO WIDYONO"), yang kalau dicek
