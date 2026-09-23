@@ -9,7 +9,7 @@ import {
     Font,
 } from '@react-pdf/renderer'
 import { InvoiceItemForm } from '@/types'
-import { formatCurrency, formatDate, formatNumber, getAssetPath } from '../utils'
+import { formatCurrency, formatDate, formatNumber, getAssetPath, getInvoiceTitle } from '../utils'
 
 // Register fonts (optional - using default for now)
 // Font.register({
@@ -260,7 +260,7 @@ export function JayamenTemplate({
                         </View>
                     </View>
                     <View style={styles.invoiceInfo}>
-                        <Text style={styles.invoiceTitle}>FAKTUR</Text>
+                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName)}</Text>
                         <Text style={styles.invoiceNumber}>{invoiceNumber}</Text>
                         <Text style={styles.invoiceDate}>
                             TANGGAL: {formatDate(invoiceDate)}
