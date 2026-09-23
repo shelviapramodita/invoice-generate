@@ -8,7 +8,7 @@ import {
     Image,
 } from '@react-pdf/renderer'
 import { InvoiceItemForm } from '@/types'
-import { formatDate, formatNumber, getAssetPath } from '../utils'
+import { formatDate, formatNumber, getAssetPath, getInvoiceTitle } from '../utils'
 
 interface UndiYuwonoTemplateProps {
     invoiceNumber: string
@@ -234,7 +234,7 @@ export function UndiYuwonoTemplate({
                         style={styles.logo}
                     />
                     <View style={styles.invoiceInfo}>
-                        <Text style={styles.invoiceTitle}>FAKTUR</Text>
+                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName)}</Text>
                         <Text style={styles.invoiceNumber}>{invoiceNumber}</Text>
                         <Text style={styles.invoiceDate}>
                             Tanggal: {formatDate(invoiceDate)}

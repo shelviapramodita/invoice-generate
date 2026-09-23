@@ -98,7 +98,7 @@ export function resetSequence(start: number = 1) {
  */
 const BUAYAN_NO_SIGNATURE_FROM  = '2026-09-12'
 const SUMPIUH_NO_SIGNATURE_FROM = '2026-09-13'
-const TAMBAK_NO_SIGNATURE_FROM  = '2026-09-13'
+const TAMBAK_NO_SIGNATURE_FROM  = '2026-09-11'
 
 export function shouldHideSignature(customerName: string | undefined, invoiceDate: Date): boolean {
     if (!customerName) return false
@@ -108,6 +108,15 @@ export function shouldHideSignature(customerName: string | undefined, invoiceDat
     if (upper.includes('SUMPIUH')) return dateStr >= SUMPIUH_NO_SIGNATURE_FROM
     if (upper.includes('TAMBAK'))  return dateStr >= TAMBAK_NO_SIGNATURE_FROM
     return false
+}
+
+/**
+ * Dapur Tambak minta judul invoice "TAGIHAN", bukan "FAKTUR" (berlaku di
+ * semua template supplier, tidak per-tanggal seperti aturan ttd di atas).
+ */
+export function getInvoiceTitle(customerName: string | undefined): string {
+    if (customerName && customerName.toUpperCase().includes('TAMBAK')) return 'TAGIHAN'
+    return 'FAKTUR'
 }
 
 /**
