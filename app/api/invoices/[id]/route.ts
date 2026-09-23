@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getInvoiceById, deleteInvoiceHistory } from '@/lib/db/queries'
 import { createClient } from '@/lib/supabase/server'
-import { shouldHideSignature, getSupplierTemplateKey } from '@/lib/pdf/utils'
+import { getSupplierTemplateKey } from '@/lib/pdf/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -235,35 +235,35 @@ export async function PATCH(
                     total: item.total,
                 }))
 
-                // Dapur Buayan (SPPG Sikayu Buayan): tanpa ttd & cap LUNAS
-                // mulai tanggal tertentu, invoice sebelum itu tetap pakai ttd.
-                const hideSignature = shouldHideSignature(customerName, invoiceDateParsed)
-
                 const templateKey = getSupplierTemplateKey(supplier)
                 if (!templateKey) {
                     unrecognizedSuppliers.push(supplier)
                     continue
                 }
 
+                // Dapur Tambak/Sumpiuh/Buayan: varian dokumen (TAGIHAN/KWITANSI)
+                // dipilih user saat generate awal, bukan disimpan per-invoice —
+                // regenerate dari sini (edit item lalu simpan) tidak tahu varian
+                // aslinya, jadi default ke 'tagihan' (ttd tetap ada, tanpa cap).
                 let template
                 switch (templateKey) {
                     case 'jayamen':
-                        template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                         break
                     case 'undi-yuwono':
-                        template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                         break
                     case 'nusantara-food':
-                        template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                         break
                     case 'susilo-widyono':
-                        template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO', hideSignature })
+                        template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO' })
                         break
                     case 'sri-karya-mukti':
-                        template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                         break
                     case 'ud-hidayat':
-                        template = UdHidayatTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, hideSignature })
+                        template = UdHidayatTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
                         break
                 }
 

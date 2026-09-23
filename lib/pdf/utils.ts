@@ -92,34 +92,43 @@ export function resetSequence(start: number = 1) {
 }
 
 /**
- * Per-dapur cutoff: mulai tanggal ini invoice tidak pakai ttd & cap LUNAS.
- * Invoice sebelum cutoff tetap pakai ttd (sudah kadung dikirim dengan ttd).
- * Ubah tanggal ini kalau kebijakannya berubah lagi.
+ * Dapur Tambak, Sumpiuh, dan Buayan punya 2 varian dokumen yang user pilih
+ * sendiri saat generate (bukan lagi berdasarkan tanggal cutoff):
+ *   - 'tagihan'  (softfile): judul "TAGIHAN", ttd tetap ada, cap LUNAS hilang.
+ *   - 'kwitansi' (hardfile): judul "KWITANSI", ttd & cap LUNAS hilang,
+ *     label "Tagihan Kepada" jadi "Pembayaran".
+ * Customer lain selalu dapat invoice biasa ("FAKTUR", ttd + cap LUNAS
+ * lengkap) — documentType diabaikan untuk mereka.
  */
-const BUAYAN_NO_SIGNATURE_FROM  = '2026-09-12'
-const SUMPIUH_NO_SIGNATURE_FROM = '2026-09-13'
-const TAMBAK_NO_SIGNATURE_FROM  = '2026-09-01'
+export type InvoiceDocType = 'tagihan' | 'kwitansi'
 
-export function shouldHideSignature(customerName: string | undefined, invoiceDate: Date): boolean {
+const SPECIAL_DAPUR_KEYWORDS = ['TAMBAK', 'SUMPIUH', 'BUAYAN']
+
+export function isSpecialDapur(customerName: string | undefined): boolean {
     if (!customerName) return false
-    const upper   = customerName.toUpperCase()
-    const dateStr = format(invoiceDate, 'yyyy-MM-dd')
-    if (upper.includes('BUAYAN'))  return dateStr >= BUAYAN_NO_SIGNATURE_FROM
-    if (upper.includes('SUMPIUH')) return dateStr >= SUMPIUH_NO_SIGNATURE_FROM
-    if (upper.includes('TAMBAK'))  return dateStr >= TAMBAK_NO_SIGNATURE_FROM
-    return false
+    const upper = customerName.toUpperCase()
+    return SPECIAL_DAPUR_KEYWORDS.some(k => upper.includes(k))
 }
 
-/**
- * Dapur Tambak, Sumpiuh, dan Buayan minta judul invoice "TAGIHAN", bukan
- * "FAKTUR" (berlaku di semua template supplier, tidak per-tanggal seperti
- * aturan ttd di atas).
- */
-export function getInvoiceTitle(customerName: string | undefined): string {
-    if (!customerName) return 'FAKTUR'
-    const upper = customerName.toUpperCase()
-    if (upper.includes('TAMBAK') || upper.includes('SUMPIUH') || upper.includes('BUAYAN')) return 'TAGIHAN'
-    return 'FAKTUR'
+export function getInvoiceTitle(customerName: string | undefined, docType?: InvoiceDocType): string {
+    if (!isSpecialDapur(customerName)) return 'FAKTUR'
+    return docType === 'kwitansi' ? 'KWITANSI' : 'TAGIHAN'
+}
+
+/** Hides ttd image, garis, nama, dan tanggal di bawahnya — cuma untuk varian KWITANSI. */
+export function shouldHideSignature(customerName: string | undefined, docType?: InvoiceDocType): boolean {
+    return isSpecialDapur(customerName) && docType === 'kwitansi'
+}
+
+/** Cap LUNAS hilang di KEDUA varian (TAGIHAN maupun KWITANSI) dapur-dapur ini. */
+export function shouldHideStamp(customerName: string | undefined): boolean {
+    return isSpecialDapur(customerName)
+}
+
+/** "Tagihan Kepada:" biasa, kecuali varian KWITANSI dapur-dapur ini → "Pembayaran". */
+export function getCustomerLabelPrefix(customerName: string | undefined, docType?: InvoiceDocType): string {
+    if (isSpecialDapur(customerName) && docType === 'kwitansi') return 'Pembayaran'
+    return 'Tagihan Kepada:'
 }
 
 /**

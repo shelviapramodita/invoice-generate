@@ -8,16 +8,20 @@ import {
     Image,
 } from '@react-pdf/renderer'
 import { InvoiceItemForm } from '@/types'
-import { formatDate, formatNumber, getAssetPath, getInvoiceTitle } from '../utils'
+import {
+    formatDate, formatNumber, getAssetPath,
+    getInvoiceTitle, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
+    InvoiceDocType,
+} from '../utils'
 
 interface UndiYuwonoTemplateProps {
     invoiceNumber: string
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
-    // Beberapa customer (mis. Dapur Buayan) minta invoice tanpa gambar tanda
-    // tangan & cap LUNAS. Garis dan nama tetap tercetak seperti biasa.
-    hideSignature?: boolean
+    // Dapur Tambak/Sumpiuh/Buayan punya 2 varian (lihat getInvoiceTitle() dkk
+    // di ../utils) — undefined/lainnya = invoice biasa (FAKTUR, ttd+cap lengkap).
+    documentType?: InvoiceDocType
 }
 
 // Styles for UNDI YUWONO template (Gray/Neutral theme)
@@ -220,9 +224,11 @@ export function UndiYuwonoTemplate({
     invoiceDate,
     items,
     customerName = 'SPPG PANDANSARI',
-    hideSignature = false,
+    documentType,
 }: UndiYuwonoTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
+    const hideSignature = shouldHideSignature(customerName, documentType)
+    const hideStamp = shouldHideStamp(customerName)
 
     return (
         <Document>
@@ -234,7 +240,7 @@ export function UndiYuwonoTemplate({
                         style={styles.logo}
                     />
                     <View style={styles.invoiceInfo}>
-                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName)}</Text>
+                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName, documentType)}</Text>
                         <Text style={styles.invoiceNumber}>{invoiceNumber}</Text>
                         <Text style={styles.invoiceDate}>
                             Tanggal: {formatDate(invoiceDate)}
@@ -244,7 +250,7 @@ export function UndiYuwonoTemplate({
 
                 {/* Customer */}
                 <View style={styles.customerSection}>
-                    <Text style={styles.customerLabel}>Tagihan Kepada:</Text>
+                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(customerName, documentType)}</Text>
                     <Text style={styles.customerName}>{customerName}</Text>
                 </View>
 
@@ -295,16 +301,16 @@ export function UndiYuwonoTemplate({
                     <View style={styles.signatureSection}>
                         <View style={styles.signatureRow}>
                             {!hideSignature && (
-                                <>
-                                    <Image
-                                        src={getAssetPath('/assets/undi-yuwono/signature.png')}
-                                        style={styles.signature}
-                                    />
-                                    <Image
-                                        src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                        style={styles.stamp}
-                                    />
-                                </>
+                                <Image
+                                    src={getAssetPath('/assets/undi-yuwono/signature.png')}
+                                    style={styles.signature}
+                                />
+                            )}
+                            {!hideSignature && !hideStamp && (
+                                <Image
+                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
+                                    style={styles.stamp}
+                                />
                             )}
                         </View>
                         {!hideSignature && <View style={styles.signatureLine} />}

@@ -9,7 +9,11 @@ import {
     Font,
 } from '@react-pdf/renderer'
 import { InvoiceItemForm } from '@/types'
-import { formatCurrency, formatDate, formatNumber, getAssetPath, getInvoiceTitle } from '../utils'
+import {
+    formatCurrency, formatDate, formatNumber, getAssetPath,
+    getInvoiceTitle, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
+    InvoiceDocType,
+} from '../utils'
 
 // Register fonts (optional - using default for now)
 // Font.register({
@@ -22,9 +26,9 @@ interface JayamenTemplateProps {
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
-    // Beberapa customer (mis. Dapur Buayan) minta invoice tanpa gambar tanda
-    // tangan & cap LUNAS. Garis dan nama tetap tercetak seperti biasa.
-    hideSignature?: boolean
+    // Dapur Tambak/Sumpiuh/Buayan punya 2 varian (lihat getInvoiceTitle() dkk
+    // di ../utils) — undefined/lainnya = invoice biasa (FAKTUR, ttd+cap lengkap).
+    documentType?: InvoiceDocType
 }
 
 // Styles for JAYAMEN template (Green theme)
@@ -238,9 +242,11 @@ export function JayamenTemplate({
     invoiceDate,
     items,
     customerName = 'SPPG Pandansari',
-    hideSignature = false,
+    documentType,
 }: JayamenTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
+    const hideSignature = shouldHideSignature(customerName, documentType)
+    const hideStamp = shouldHideStamp(customerName)
 
     return (
         <Document>
@@ -260,7 +266,7 @@ export function JayamenTemplate({
                         </View>
                     </View>
                     <View style={styles.invoiceInfo}>
-                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName)}</Text>
+                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName, documentType)}</Text>
                         <Text style={styles.invoiceNumber}>{invoiceNumber}</Text>
                         <Text style={styles.invoiceDate}>
                             TANGGAL: {formatDate(invoiceDate)}
@@ -270,7 +276,7 @@ export function JayamenTemplate({
 
                 {/* Customer */}
                 <View style={styles.customerSection}>
-                    <Text style={styles.customerLabel}>Tagihan Kepada: {customerName}</Text>
+                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(customerName, documentType)} {customerName}</Text>
                 </View>
 
                 {/* Table */}
@@ -323,16 +329,16 @@ export function JayamenTemplate({
                     <View style={styles.signatureSection}>
                         <View style={styles.signatureRow}>
                             {!hideSignature && (
-                                <>
-                                    <Image
-                                        src={getAssetPath('/assets/jayamen/signature.png')}
-                                        style={styles.signature}
-                                    />
-                                    <Image
-                                        src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                        style={styles.stamp}
-                                    />
-                                </>
+                                <Image
+                                    src={getAssetPath('/assets/jayamen/signature.png')}
+                                    style={styles.signature}
+                                />
+                            )}
+                            {!hideSignature && !hideStamp && (
+                                <Image
+                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
+                                    style={styles.stamp}
+                                />
                             )}
                         </View>
                         {!hideSignature && <View style={styles.signatureLine} />}

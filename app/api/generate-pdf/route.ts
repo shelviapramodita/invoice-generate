@@ -14,7 +14,7 @@ function isSupabaseConfigured(): boolean {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
-        const { parsedData, invoiceDate, batchName, invoiceNumbers, customerNames } = body
+        const { parsedData, invoiceDate, batchName, invoiceNumbers, customerNames, documentType } = body
 
         if (!parsedData) {
             return NextResponse.json(
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
             batchName,
             invoiceNumbers,
             customerNames,
+            documentType,
         })
 
         const pdfsData = await Promise.all(

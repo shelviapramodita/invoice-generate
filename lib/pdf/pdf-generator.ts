@@ -2,7 +2,7 @@ import { pdf } from '@react-pdf/renderer'
 import JSZip from 'jszip'
 import { format } from 'date-fns'
 import { ParsedExcelData, InvoiceItemForm, InvoiceSummary } from '@/types'
-import { getNextInvoiceNumber, shouldHideSignature, getSupplierTemplateKey } from './utils'
+import { getNextInvoiceNumber, getSupplierTemplateKey, InvoiceDocType } from './utils'
 import { JayamenTemplate } from './templates/jayamen-template'
 import { UndiYuwonoTemplate } from './templates/undi-yuwono-template'
 import { SekarWijayakusumaTemplate } from './templates/sekar-wijayakusuma-template'
@@ -23,6 +23,9 @@ export interface PDFGenerationOptions {
     customerName?: string
     customerNames?: Record<string, string>
     invoiceNumbers?: Record<string, string>
+    // Only relevant for Dapur Tambak/Sumpiuh/Buayan — which of the 2 variants
+    // to render (see InvoiceDocType in ./utils). Ignored for other customers.
+    documentType?: InvoiceDocType
 }
 
 export interface GeneratedPDF {
@@ -37,6 +40,8 @@ export interface GeneratedPDF {
     // filename prefix for single-PDF downloads so the user gets neat,
     // consistent file naming that matches what they typed in the UI.
     batchName?: string
+    // Which variant this PDF is, when generated for one of the 3 special dapur.
+    documentType?: InvoiceDocType
 }
 
 /**
@@ -62,14 +67,10 @@ async function generatePDFForSupplier(
     customInvoiceNumber?: string
 ): Promise<GeneratedPDF> {
     const invoiceNumber = customInvoiceNumber || getNextInvoiceNumber()
-    const { invoiceDate, customerName, customerNames } = options
+    const { invoiceDate, customerName, customerNames, documentType } = options
 
     // Use per-supplier customerName if available, otherwise use global customerName
     const supplierCustomerName = customerNames?.[supplier] || customerName
-
-    // Dapur Buayan (SPPG Sikayu Buayan): tanpa ttd & cap LUNAS mulai tanggal
-    // tertentu, invoice sebelum itu tetap pakai ttd. Lihat shouldHideSignature.
-    const hideSignature = shouldHideSignature(supplierCustomerName, invoiceDate)
 
     const templateKey = getSupplierTemplateKey(supplier)
     if (!templateKey) {
@@ -84,7 +85,7 @@ async function generatePDFForSupplier(
                 invoiceDate,
                 items,
                 customerName: supplierCustomerName,
-                hideSignature,
+                documentType,
             })
             break
         case 'undi-yuwono':
@@ -93,7 +94,7 @@ async function generatePDFForSupplier(
                 invoiceDate,
                 items,
                 customerName: supplierCustomerName,
-                hideSignature,
+                documentType,
             })
             break
         case 'nusantara-food':
@@ -102,7 +103,7 @@ async function generatePDFForSupplier(
                 invoiceDate,
                 items,
                 customerName: supplierCustomerName,
-                hideSignature,
+                documentType,
             })
             break
         case 'susilo-widyono':
@@ -114,7 +115,7 @@ async function generatePDFForSupplier(
                 items,
                 customerName: supplierCustomerName,
                 signatureName: 'SUSILO WIDYONO',
-                hideSignature,
+                documentType,
             })
             break
         case 'sri-karya-mukti':
@@ -123,7 +124,7 @@ async function generatePDFForSupplier(
                 invoiceDate,
                 items,
                 customerName: supplierCustomerName,
-                hideSignature,
+                documentType,
             })
             break
         case 'ud-hidayat':
@@ -132,7 +133,7 @@ async function generatePDFForSupplier(
                 invoiceDate,
                 items,
                 customerName: supplierCustomerName,
-                hideSignature,
+                documentType,
             })
             break
     }
@@ -144,6 +145,7 @@ async function generatePDFForSupplier(
         supplier,
         blob,
         invoiceNumber,
+        documentType,
     }
 }
 

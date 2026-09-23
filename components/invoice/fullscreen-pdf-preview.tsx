@@ -347,10 +347,15 @@ export function FullScreenPDFPreview({
                                                                 {pdf.supplier}
                                                             </div>
                                                             <div className={cn(
-                                                                "text-xs mt-1 font-mono",
+                                                                "text-xs mt-1 font-mono flex items-center gap-1.5",
                                                                 selectedPdf === pdf ? "opacity-90" : "opacity-60"
                                                             )}>
                                                                 {pdf.invoiceNumber}
+                                                                {pdf.documentType && (
+                                                                    <span className="font-sans font-bold uppercase text-[9px] tracking-wide px-1 py-0.5 rounded bg-black/10 dark:bg-white/15">
+                                                                        {pdf.documentType}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </button>
                                                     ))}
