@@ -46,13 +46,14 @@ interface GeneratedPDFEntry {
 }
 
 /**
- * Dapur Tambak pakai judul invoice "TAGIHAN" bukan "FAKTUR" (lihat
- * getInvoiceTitle() di lib/pdf/utils.ts — logiknya dijaga sinkron manual di
- * sini karena file itu tidak aman di-import ke client component), jadi nama
- * file/batch-nya juga ikut "Tagihan" bukan "Kwitansi".
+ * Dapur Tambak, Sumpiuh, dan Buayan pakai judul invoice "TAGIHAN" bukan
+ * "FAKTUR" (lihat getInvoiceTitle() di lib/pdf/utils.ts — logiknya dijaga
+ * sinkron manual di sini karena file itu tidak aman di-import ke client
+ * component), jadi nama file/batch-nya juga ikut "Tagihan" bukan "Kwitansi".
  */
 function batchFilePrefix(sppgName: string): string {
-    return sppgName.toUpperCase().includes('TAMBAK') ? 'Tagihan' : 'Kwitansi'
+    const upper = sppgName.toUpperCase()
+    return upper.includes('TAMBAK') || upper.includes('SUMPIUH') || upper.includes('BUAYAN') ? 'Tagihan' : 'Kwitansi'
 }
 
 /**

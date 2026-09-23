@@ -111,11 +111,14 @@ export function shouldHideSignature(customerName: string | undefined, invoiceDat
 }
 
 /**
- * Dapur Tambak minta judul invoice "TAGIHAN", bukan "FAKTUR" (berlaku di
- * semua template supplier, tidak per-tanggal seperti aturan ttd di atas).
+ * Dapur Tambak, Sumpiuh, dan Buayan minta judul invoice "TAGIHAN", bukan
+ * "FAKTUR" (berlaku di semua template supplier, tidak per-tanggal seperti
+ * aturan ttd di atas).
  */
 export function getInvoiceTitle(customerName: string | undefined): string {
-    if (customerName && customerName.toUpperCase().includes('TAMBAK')) return 'TAGIHAN'
+    if (!customerName) return 'FAKTUR'
+    const upper = customerName.toUpperCase()
+    if (upper.includes('TAMBAK') || upper.includes('SUMPIUH') || upper.includes('BUAYAN')) return 'TAGIHAN'
     return 'FAKTUR'
 }
 
