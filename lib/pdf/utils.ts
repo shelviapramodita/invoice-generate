@@ -92,17 +92,22 @@ export function resetSequence(start: number = 1) {
 }
 
 /**
- * Dapur Buayan (SPPG Sikayu Buayan) awalnya minta SEMUA invoice tanpa tanda
- * tangan & cap LUNAS, tapi ternyata invoice sebelum tanggal ini masih perlu
- * ttd basah (sudah kadung di-generate/dikirim dengan ttd). Jadi aturannya
- * per-tanggal: sebelum cutoff → tetap ada ttd, mulai cutoff → tanpa ttd.
+ * Per-dapur cutoff: mulai tanggal ini invoice tidak pakai ttd & cap LUNAS.
+ * Invoice sebelum cutoff tetap pakai ttd (sudah kadung dikirim dengan ttd).
  * Ubah tanggal ini kalau kebijakannya berubah lagi.
  */
-const BUAYAN_NO_SIGNATURE_FROM = '2026-09-12'
+const BUAYAN_NO_SIGNATURE_FROM  = '2026-09-12'
+const SUMPIUH_NO_SIGNATURE_FROM = '2026-09-13'
+const TAMBAK_NO_SIGNATURE_FROM  = '2026-09-13'
 
 export function shouldHideSignature(customerName: string | undefined, invoiceDate: Date): boolean {
-    if (!customerName || !customerName.toUpperCase().includes('BUAYAN')) return false
-    return format(invoiceDate, 'yyyy-MM-dd') >= BUAYAN_NO_SIGNATURE_FROM
+    if (!customerName) return false
+    const upper   = customerName.toUpperCase()
+    const dateStr = format(invoiceDate, 'yyyy-MM-dd')
+    if (upper.includes('BUAYAN'))  return dateStr >= BUAYAN_NO_SIGNATURE_FROM
+    if (upper.includes('SUMPIUH')) return dateStr >= SUMPIUH_NO_SIGNATURE_FROM
+    if (upper.includes('TAMBAK'))  return dateStr >= TAMBAK_NO_SIGNATURE_FROM
+    return false
 }
 
 /**
