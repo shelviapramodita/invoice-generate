@@ -8,16 +8,20 @@ import {
     Image,
 } from '@react-pdf/renderer'
 import { InvoiceItemForm } from '@/types'
-import { formatDate, formatNumber, getAssetPath, getInvoiceTitle } from '../utils'
+import {
+    formatDate, formatNumber, getAssetPath,
+    getInvoiceTitle, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
+    InvoiceDocType,
+} from '../utils'
 
 interface UdHidayatTemplateProps {
     invoiceNumber: string
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
-    // Beberapa customer (mis. Dapur Buayan) minta invoice tanpa gambar tanda
-    // tangan & cap LUNAS. Garis dan nama tetap tercetak seperti biasa.
-    hideSignature?: boolean
+    // Dapur Tambak/Sumpiuh/Buayan punya 2 varian (lihat getInvoiceTitle() dkk
+    // di ../utils) — undefined/lainnya = invoice biasa (FAKTUR, ttd+cap lengkap).
+    documentType?: InvoiceDocType
 }
 
 // Styles for UD HIDAYAT template (Sky Blue theme)
@@ -235,9 +239,11 @@ export function UdHidayatTemplate({
     invoiceDate,
     items,
     customerName = 'SPPG Pandansari',
-    hideSignature = false,
+    documentType,
 }: UdHidayatTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
+    const hideSignature = shouldHideSignature(customerName, documentType)
+    const hideStamp = shouldHideStamp(customerName)
 
     return (
         <Document>
@@ -257,7 +263,7 @@ export function UdHidayatTemplate({
                         </View>
                     </View>
                     <View style={styles.invoiceInfo}>
-                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName)}</Text>
+                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName, documentType)}</Text>
                         <Text style={styles.invoiceNumber}>{invoiceNumber}</Text>
                         <Text style={styles.invoiceDate}>
                             TANGGAL: {formatDate(invoiceDate)}
@@ -267,7 +273,7 @@ export function UdHidayatTemplate({
 
                 {/* Customer */}
                 <View style={styles.customerSection}>
-                    <Text style={styles.customerLabel}>Tagihan Kepada: {customerName}</Text>
+                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(customerName, documentType)} {customerName}</Text>
                 </View>
 
                 {/* Table */}
@@ -320,16 +326,16 @@ export function UdHidayatTemplate({
                     <View style={styles.signatureSection}>
                         <View style={styles.signatureRow}>
                             {!hideSignature && (
-                                <>
-                                    <Image
-                                        src={getAssetPath('/assets/ud-hidayat/signature.png')}
-                                        style={styles.signature}
-                                    />
-                                    <Image
-                                        src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                        style={styles.stamp}
-                                    />
-                                </>
+                                <Image
+                                    src={getAssetPath('/assets/ud-hidayat/signature.png')}
+                                    style={styles.signature}
+                                />
+                            )}
+                            {!hideSignature && !hideStamp && (
+                                <Image
+                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
+                                    style={styles.stamp}
+                                />
                             )}
                         </View>
                         {!hideSignature && <View style={styles.signatureLine} />}
