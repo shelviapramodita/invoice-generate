@@ -202,7 +202,12 @@ export function FullScreenPDFPreview({
                     new Set(effectivePdfs.map(p => p.groupLabel).filter((g): g is string => !!g))
                 ).sort((a, b) => a.split('-').reverse().join('').localeCompare(b.split('-').reverse().join('')))
                 if (sortedDates.length >= 2) {
-                    baseLabel = sanitizeFilename(`Kwitansi - ${sortedDates[0]} sd ${sortedDates[sortedDates.length - 1]}`)
+                    // Kalau semua batch yang digabung sudah pakai prefix "Tagihan"
+                    // (Dapur Tambak), pertahankan; default "Kwitansi" untuk yang lain.
+                    const prefix = uniqueBatches.every(b => b.trim().toUpperCase().startsWith('TAGIHAN'))
+                        ? 'Tagihan'
+                        : 'Kwitansi'
+                    baseLabel = sanitizeFilename(`${prefix} - ${sortedDates[0]} sd ${sortedDates[sortedDates.length - 1]}`)
                 } else {
                     baseLabel = sanitizeFilename(uniqueBatches.join(' & '))
                 }

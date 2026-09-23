@@ -46,11 +46,21 @@ interface GeneratedPDFEntry {
 }
 
 /**
+ * Dapur Tambak pakai judul invoice "TAGIHAN" bukan "FAKTUR" (lihat
+ * getInvoiceTitle() di lib/pdf/utils.ts — logiknya dijaga sinkron manual di
+ * sini karena file itu tidak aman di-import ke client component), jadi nama
+ * file/batch-nya juga ikut "Tagihan" bukan "Kwitansi".
+ */
+function batchFilePrefix(sppgName: string): string {
+    return sppgName.toUpperCase().includes('TAMBAK') ? 'Tagihan' : 'Kwitansi'
+}
+
+/**
  * Build the auto-detected batch name for a sheet.
  * Format: "Kwitansi SPPG <Name> - [<Category> ]DD/MM/YYYY[ (Tahap N)]"
- *   "RAB SPPG Tambak.xlsx" + "8 APRIL 2026 DONE" → "Kwitansi SPPG Tambak - 08/04/2026"
- *   "RAB SPPG Tambak.xlsx" + "OPS 8 APRIL 2026" → "Kwitansi SPPG Tambak - Operasional 08/04/2026"
- *   "RAB SPPG Tambak.xlsx" + "OPS GALON 8 APRIL 2026" → "Kwitansi SPPG Tambak - Operasional Galon 08/04/2026"
+ *   "RAB SPPG Tambak.xlsx" + "8 APRIL 2026 DONE" → "Tagihan SPPG Tambak - 08/04/2026"
+ *   "RAB SPPG Tambak.xlsx" + "OPS 8 APRIL 2026" → "Tagihan SPPG Tambak - Operasional 08/04/2026"
+ *   "RAB SPPG Tambak.xlsx" + "OPS GALON 8 APRIL 2026" → "Tagihan SPPG Tambak - Operasional Galon 08/04/2026"
  *   "RAB SPPG Buayan.xlsx" + "7 SEPTEMBER TAHAP 2" → "Kwitansi SPPG Buayan - 07/09/2026 (Tahap 2)"
  */
 function defaultBatchName(date: Date, sppgName: string, category?: SheetCategory, tahap?: number): string {
@@ -58,7 +68,7 @@ function defaultBatchName(date: Date, sppgName: string, category?: SheetCategory
     const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
     const categoryStr = category ? `${CATEGORY_LABELS[category]} ` : ''
     const tahapStr = tahap ? ` (Tahap ${tahap})` : ''
-    return `Kwitansi ${sppg} - ${categoryStr}${dateStr}${tahapStr}`
+    return `${batchFilePrefix(sppgName)} ${sppg} - ${categoryStr}${dateStr}${tahapStr}`
 }
 
 /** Format an integer into "#KWITANSI0001"-style invoice number (4-digit zero-padded). */
@@ -377,10 +387,10 @@ export default function UploadPage() {
             // so we can reuse its batchName (which already has Operasional/Galon prefix when applicable).
             const target = groupLabels[0]
             const matched = Object.values(configs).find(c => format(c.invoiceDate, 'dd-MM-yyyy') === target)
-            zipBatchName = matched?.batchName ?? `Kwitansi ${sppg} - ${target}`
+            zipBatchName = matched?.batchName ?? `${batchFilePrefix(sppgName)} ${sppg} - ${target}`
         } else if (groupLabels.length > 1) {
             // Date range
-            zipBatchName = `Kwitansi ${sppg} - ${groupLabels[0]} sd ${groupLabels[groupLabels.length - 1]}`
+            zipBatchName = `${batchFilePrefix(sppgName)} ${sppg} - ${groupLabels[0]} sd ${groupLabels[groupLabels.length - 1]}`
         } else {
             // No groupLabels (shouldn't happen in normal flow) — fallback
             zipBatchName = configs[selectedSheetNames[0]]?.batchName
@@ -588,7 +598,7 @@ export default function UploadPage() {
                                                     onChange={(e) =>
                                                         updateConfig(previewSheet.sheetName, { batchName: e.target.value })
                                                     }
-                                                    placeholder="Kwitansi SPPG Tambak - 21/01/2026"
+                                                    placeholder="Tagihan SPPG Tambak - 21/01/2026"
                                                 />
                                             </div>
                                         </div>
