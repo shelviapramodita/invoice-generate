@@ -98,7 +98,7 @@ export function resetSequence(start: number = 1) {
  */
 const BUAYAN_NO_SIGNATURE_FROM  = '2026-09-12'
 const SUMPIUH_NO_SIGNATURE_FROM = '2026-09-13'
-const TAMBAK_NO_SIGNATURE_FROM  = '2026-09-11'
+const TAMBAK_NO_SIGNATURE_FROM  = '2026-09-01'
 
 export function shouldHideSignature(customerName: string | undefined, invoiceDate: Date): boolean {
     if (!customerName) return false
