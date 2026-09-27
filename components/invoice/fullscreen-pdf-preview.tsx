@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Download, X, FileArchive, FilePlus2, ChevronDown, ChevronRight, Filter } from 'lucide-react'
 import { GeneratedPDF } from '@/lib/pdf/pdf-generator'
+import type { InvoiceDocType } from '@/lib/pdf/utils'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
@@ -33,6 +34,11 @@ function formatGroupLabel(label: string): string {
 
 const NO_DATE_KEY = '__no_date__'
 
+const DOC_TYPE_OPTIONS: { value: InvoiceDocType; label: string; hint: string }[] = [
+    { value: 'tagihan', label: 'TAGIHAN', hint: 'Softfile — ttd ada, tanpa cap LUNAS' },
+    { value: 'kwitansi', label: 'KWITANSI', hint: 'Hardfile — tanpa ttd & cap LUNAS' },
+]
+
 interface FullScreenPDFPreviewProps {
     open: boolean
     onClose: () => void
@@ -44,6 +50,14 @@ interface FullScreenPDFPreviewProps {
      */
     onDownload: (filteredPdfs: GeneratedPDF[]) => void
     batchName?: string
+    /**
+     * Dapur Tambak/Sumpiuh/Buayan only: variant currently shown. When set, a
+     * TAGIHAN/KWITANSI toggle appears in the header and calls
+     * onDocumentTypeChange; the parent swaps `pdfs` for the chosen variant.
+     */
+    documentType?: InvoiceDocType
+    onDocumentTypeChange?: (docType: InvoiceDocType) => void
+    documentTypeLoading?: boolean
 }
 
 export function FullScreenPDFPreview({
@@ -51,7 +65,10 @@ export function FullScreenPDFPreview({
     onClose,
     pdfs,
     onDownload,
-    batchName
+    batchName,
+    documentType,
+    onDocumentTypeChange,
+    documentTypeLoading = false,
 }: FullScreenPDFPreviewProps) {
     const [selectedPdf, setSelectedPdf] = useState<GeneratedPDF | null>(null)
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -130,12 +147,24 @@ export function FullScreenPDFPreview({
     // preview session — e.g. a leftover date filter that no longer matches
     // any group in the new batch — doesn't leak in and silently zero out
     // the visible list.
+    //
+    // Exception: switching TAGIHAN ⇄ KWITANSI swaps in the same invoices in
+    // another variant — keep the filter and stay on the same supplier/day.
     useEffect(() => {
         if (open && pdfs.length > 0) {
-            setFilterDate('all')
-            setCollapsedGroups(new Set())
-            handleSelectPdf(pdfs[0])
+            const sameInvoice = selectedPdf && pdfs.find(p =>
+                p.supplier === selectedPdf.supplier &&
+                p.groupLabel === selectedPdf.groupLabel &&
+                p.invoiceNumber === selectedPdf.invoiceNumber
+            )
+            if (!sameInvoice) {
+                setFilterDate('all')
+                setCollapsedGroups(new Set())
+            }
+            handleSelectPdf(sameInvoice || pdfs[0])
         }
+    // selectedPdf intentionally omitted — only react to a new pdfs list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, pdfs])
 
     const handleClose = () => {
@@ -261,9 +290,40 @@ export function FullScreenPDFPreview({
                                 }
                             </DialogDescription>
                         </div>
-                        <Button variant="ghost" size="icon-sm" onClick={handleClose}>
-                            <X className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-start gap-3">
+                            {documentType && onDocumentTypeChange && !isLoading && (
+                                <div className="flex flex-col items-end gap-1">
+                                    <div className="inline-flex rounded-lg border bg-muted/40 p-1" role="radiogroup" aria-label="Tipe dokumen">
+                                        {DOC_TYPE_OPTIONS.map(opt => (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                role="radio"
+                                                aria-checked={documentType === opt.value}
+                                                onClick={() => onDocumentTypeChange(opt.value)}
+                                                disabled={documentTypeLoading || downloading}
+                                                className={cn(
+                                                    "px-4 py-1.5 text-sm font-semibold rounded-md transition-colors disabled:cursor-not-allowed",
+                                                    documentType === opt.value
+                                                        ? "bg-primary text-primary-foreground shadow-sm"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-background"
+                                                )}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">
+                                        {documentTypeLoading
+                                            ? 'Menyiapkan dokumen...'
+                                            : DOC_TYPE_OPTIONS.find(o => o.value === documentType)?.hint}
+                                    </span>
+                                </div>
+                            )}
+                            <Button variant="ghost" size="icon-sm" onClick={handleClose}>
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
@@ -368,7 +428,15 @@ export function FullScreenPDFPreview({
                         </div>
 
                         {/* Preview */}
-                        <div className="flex-1 border rounded-lg bg-white dark:bg-zinc-950 shadow-lg overflow-hidden">
+                        <div className="relative flex-1 border rounded-lg bg-white dark:bg-zinc-950 shadow-lg overflow-hidden">
+                            {documentTypeLoading && (
+                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+                                    <div className="text-center">
+                                        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-3" />
+                                        <p className="text-sm font-medium">Menyiapkan dokumen...</p>
+                                    </div>
+                                </div>
+                            )}
                             {previewUrl ? (
                                 <iframe
                                     src={`${previewUrl}#view=FitH&toolbar=1&navpanes=0&scrollbar=1`}
@@ -426,7 +494,7 @@ export function FullScreenPDFPreview({
                                         e.preventDefault()
                                         handleDownloadCurrent()
                                     }}
-                                    disabled={!selectedPdf || downloading}
+                                    disabled={!selectedPdf || downloading || documentTypeLoading}
                                     className="w-full"
                                 >
                                     <Download className="mr-2 h-4 w-4" />
@@ -439,7 +507,7 @@ export function FullScreenPDFPreview({
                                         e.preventDefault()
                                         handleDownloadMerged()
                                     }}
-                                    disabled={downloading || effectivePdfs.length === 0}
+                                    disabled={downloading || documentTypeLoading || effectivePdfs.length === 0}
                                     className="w-full"
                                 >
                                     <FilePlus2 className="mr-2 h-4 w-4" />
@@ -452,7 +520,7 @@ export function FullScreenPDFPreview({
                                         e.preventDefault()
                                         handleDownloadAll()
                                     }}
-                                    disabled={downloading || effectivePdfs.length === 0}
+                                    disabled={downloading || documentTypeLoading || effectivePdfs.length === 0}
                                     className="w-full"
                                 >
                                     <FileArchive className="mr-2 h-4 w-4" />

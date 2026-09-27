@@ -14,7 +14,10 @@ function isSupabaseConfigured(): boolean {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
-        const { parsedData, invoiceDate, batchName, invoiceNumbers, customerNames, documentType } = body
+        // saveHistory=false dipakai saat user switch varian dokumen (TAGIHAN ⇄
+        // KWITANSI) di halaman preview — PDF-nya cuma di-render ulang, jangan
+        // sampai bikin baris invoice_history dobel untuk hari yang sama.
+        const { parsedData, invoiceDate, batchName, invoiceNumbers, customerNames, documentType, saveHistory = true } = body
 
         if (!parsedData) {
             return NextResponse.json(
@@ -42,7 +45,7 @@ export async function POST(request: NextRequest) {
 
         let historyId: string | null = null
 
-        if (isSupabaseConfigured()) {
+        if (saveHistory && isSupabaseConfigured()) {
             try {
                 const { createInvoiceHistory, createInvoiceItems } = await import('@/lib/db/queries')
                 const { createClient } = await import('@/lib/supabase/server')

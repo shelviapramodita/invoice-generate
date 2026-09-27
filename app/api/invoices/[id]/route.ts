@@ -143,7 +143,7 @@ export async function PATCH(
                 const row: Record<string, any> = {
                     history_id: id,
                     supplier: item.supplier,
-                    invoice_number: item.invoice_number || '#KWITANSI0001',
+                    invoice_number: item.invoice_number || '#0001',
                     item_name: item.item_name,
                     quantity: parseFloat(item.quantity),
                     unit: item.unit,
@@ -220,7 +220,7 @@ export async function PATCH(
             const invoiceDateParsed = new Date(invoiceHistory.invoice_date)
 
             for (const [supplier, supplierItems] of Object.entries(itemsBySupplier)) {
-                const invoiceNumber = supplierItems[0]?.invoice_number || '#KWITANSI0001'
+                const invoiceNumber = supplierItems[0]?.invoice_number || '#0001'
                 const oldPdfPath = supplierItems[0]?.pdf_file_path
                 // customer_name = "Tagihan Kepada" — same for all items of one supplier
                 // (per the upload flow). Read from first item in the group.

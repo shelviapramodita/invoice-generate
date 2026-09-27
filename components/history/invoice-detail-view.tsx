@@ -290,7 +290,7 @@ export function InvoiceDetailView({
     // Add item to a supplier
     const handleAddItem = (supplier: string) => {
         const supplierItems = editedItems.filter(i => i.supplier === supplier)
-        const invoiceNumber = supplierItems[0]?.invoice_number || '#KWITANSI0001'
+        const invoiceNumber = supplierItems[0]?.invoice_number || '#0001'
 
         const newItem: InvoiceItem = {
             id: generateTempId(),
@@ -326,7 +326,7 @@ export function InvoiceDetailView({
         const newItem: InvoiceItem = {
             id: generateTempId(),
             supplier: newSupplierName.trim(),
-            invoice_number: newSupplierInvoiceNumber.trim() || '#KWITANSI0001',
+            invoice_number: newSupplierInvoiceNumber.trim() || '#0001',
             item_name: '',
             quantity: 0,
             unit: 'pcs',
@@ -874,7 +874,7 @@ export function InvoiceDetailView({
                                                                         <Input
                                                                             value={invoiceNumber}
                                                                             onChange={(e) => handleInvoiceNumberChange(supplier, e.target.value)}
-                                                                            placeholder="#KWITANSI0001"
+                                                                            placeholder="#0001"
                                                                             className="mt-0.5 h-8 font-mono text-sm"
                                                                         />
                                                                     </div>
@@ -1206,7 +1206,7 @@ export function InvoiceDetailView({
                             <Input
                                 value={newSupplierInvoiceNumber}
                                 onChange={(e) => setNewSupplierInvoiceNumber(e.target.value)}
-                                placeholder="#KWITANSI0001"
+                                placeholder="#0001"
                                 className="mt-1 font-mono"
                             />
                         </div>
