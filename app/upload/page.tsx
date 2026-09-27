@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ExcelUploader } from '@/components/excel/excel-uploader'
@@ -47,16 +46,17 @@ interface GeneratedPDFEntry {
     documentType?: DocType
 }
 
-// Only relevant for Dapur Tambak/Sumpiuh/Buayan — which of the 2 variants to
-// generate (see InvoiceDocType in lib/pdf/utils.ts — kept as a plain string
+// Only relevant for Dapur Tambak/Sumpiuh/Buayan — which of the 2 variants is
+// shown in the preview (see InvoiceDocType in lib/pdf/utils.ts — kept as a plain string
 // union here, duplicated manually, because that file isn't safe to import
 // into a client component).
 type DocType = 'tagihan' | 'kwitansi'
 
 /**
  * Dapur Tambak, Sumpiuh, dan Buayan punya 2 varian dokumen yang user pilih
- * sendiri (lihat checklist "Tipe Dokumen" di bawah): TAGIHAN (softfile, ttd
- * tetap ada tanpa cap LUNAS) dan KWITANSI (hardfile, tanpa ttd & cap LUNAS).
+ * sendiri lewat toggle di halaman preview: TAGIHAN (softfile, ttd tetap ada
+ * tanpa cap LUNAS) dan KWITANSI (hardfile, tanpa ttd & cap LUNAS, label
+ * "Pembayaran").
  * Customer lain selalu invoice biasa (FAKTUR).
  */
 function isSpecialDapur(sppgName: string): boolean {
@@ -93,9 +93,9 @@ function defaultBatchName(date: Date, sppgName: string, category?: SheetCategory
     return `${batchFilePrefix(sppgName)} ${sppg} - ${categoryStr}${dateStr}${tahapStr}`
 }
 
-/** Format an integer into "#KWITANSI0001"-style invoice number (4-digit zero-padded). */
+/** Format an integer into a general "#0001"-style invoice number (4-digit zero-padded, no "KWITANSI" prefix). */
 function formatInvoiceNumber(n: number): string {
-    return `#KWITANSI${String(n).padStart(4, '0')}`
+    return `#${String(n).padStart(4, '0')}`
 }
 
 /**
@@ -138,9 +138,13 @@ export default function UploadPage() {
     const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
     const [showPreview, setShowPreview] = useState(false)
     const [generatedPDFs, setGeneratedPDFs] = useState<GeneratedPDFEntry[]>([])
-    // Only used when isSpecialDapur(sppgName) — which document variant(s) to
-    // generate. TAGIHAN checked by default (closest to prior single-case behavior).
-    const [selectedDocTypes, setSelectedDocTypes] = useState<Set<DocType>>(new Set(['tagihan']))
+    // Dapur Tambak/Sumpiuh/Buayan only: which variant the preview is showing
+    // (undefined = customer biasa, no toggle). The other variant is generated
+    // lazily the first time the user switches to it, then cached here so
+    // switching back and forth is instant.
+    const [activeDocType, setActiveDocType] = useState<DocType | undefined>(undefined)
+    const [pdfsByDocType, setPdfsByDocType] = useState<Partial<Record<DocType, GeneratedPDFEntry[]>>>({})
+    const [switchingDocType, setSwitchingDocType] = useState(false)
     // Starting invoice number (used as base for sequential numbering across
     // selected sheets). Persisted to localStorage so user doesn't need to
     // re-enter every session — they just continue from where they left off.
@@ -274,20 +278,88 @@ export default function UploadPage() {
         }))
     }
 
+    /**
+     * Generate PDFs for every selected sheet in one document variant. Returns
+     * the PDFs plus any suppliers the API couldn't match to a template.
+     * saveHistory=false when re-rendering the other variant from the preview
+     * toggle, so the same day doesn't get 2 rows in /history.
+     */
+    const generateVariant = async (
+        docType: DocType | undefined,
+        saveHistory: boolean,
+        onSheetDone?: (done: number) => void,
+    ): Promise<{ pdfs: GeneratedPDFEntry[]; unrecognized: string[] }> => {
+        const isSpecial = docType !== undefined
+        const pdfs: GeneratedPDFEntry[] = []
+        const unrecognized: string[] = []
+
+        for (let i = 0; i < selectedSheetNames.length; i++) {
+            const sheetName = selectedSheetNames[i]
+            const sheet = sheets.find(s => s.sheetName === sheetName)
+            const cfg = configs[sheetName]
+
+            if (!sheet?.data || !cfg) {
+                toast.error(`Sheet "${sheetName}" tidak memiliki data`)
+                continue
+            }
+
+            // Prefix batch name ("Tagihan"/"Kwitansi") follows the variant so
+            // downloads of the 2 variants never collide.
+            const batchNameForCall = isSpecial && cfg.batchName
+                ? withDocTypePrefix(cfg.batchName, sppgName, docType)
+                : cfg.batchName
+
+            const response = await fetch('/api/generate-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    parsedData: sheet.data,
+                    invoiceDate: format(cfg.invoiceDate, 'yyyy-MM-dd'),
+                    batchName: batchNameForCall || undefined,
+                    invoiceNumbers: cfg.invoiceNumbers,
+                    customerNames: cfg.customerNames,
+                    documentType: docType,
+                    saveHistory,
+                }),
+            })
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}))
+                throw new Error(`Gagal generate "${sheet.label}": ${err.error || response.statusText}`)
+            }
+
+            const data = await response.json()
+            data.pdfs.forEach((pdf: any) => {
+                pdfs.push({
+                    supplier: pdf.supplier,
+                    invoiceNumber: pdf.invoiceNumber,
+                    blob: base64ToBlob(pdf.blob, 'application/pdf'),
+                    sheetName,
+                    // groupLabel makes the preview sidebar + ZIP folder show the day this PDF belongs to
+                    // when the user generated multiple days at once.
+                    groupLabel: format(cfg.invoiceDate, 'dd-MM-yyyy'),
+                    // batchName is what the user typed in "Nama Batch" (prefix-adjusted per variant). Flows through to:
+                    //   - ZIP folder name (so ZIP structure mirrors what user sees in UI)
+                    //   - Single PDF download filename prefix
+                    //   - Merged PDF filename prefix
+                    batchName: batchNameForCall,
+                    documentType: docType,
+                })
+            })
+
+            ;(data.unrecognizedSuppliers || []).forEach((supplier: string) => {
+                unrecognized.push(`${supplier} (${sheet.label})`)
+            })
+
+            onSheetDone?.(i + 1)
+        }
+
+        return { pdfs, unrecognized }
+    }
+
     const handleGenerate = async () => {
         if (selectedSheetNames.length === 0) {
             toast.error('Pilih minimal 1 hari untuk di-generate')
-            return
-        }
-
-        // For the 3 dapur with 2 document variants, user must check at least
-        // one of TAGIHAN/KWITANSI. Other customers ignore this entirely.
-        const isSpecial = isSpecialDapur(sppgName)
-        const docTypesToGenerate: (DocType | undefined)[] = isSpecial
-            ? Array.from(selectedDocTypes)
-            : [undefined]
-        if (isSpecial && docTypesToGenerate.length === 0) {
-            toast.error('Pilih minimal 1 tipe dokumen (TAGIHAN atau KWITANSI)')
             return
         }
 
@@ -311,84 +383,23 @@ export default function UploadPage() {
         })
         localStorage.setItem(STORAGE_KEY, JSON.stringify(recentNames.slice(0, MAX_RECENT)))
 
-        setGenerating(true)
-        const totalCalls = selectedSheetNames.length * docTypesToGenerate.length
-        setProgress({ done: 0, total: totalCalls })
+        // Dapur Tambak/Sumpiuh/Buayan start on TAGIHAN; the user can switch to
+        // KWITANSI from the preview. Other customers have no variant.
+        const initialDocType: DocType | undefined = isSpecialDapur(sppgName) ? 'tagihan' : undefined
 
-        const allPDFs: GeneratedPDFEntry[] = []
-        // Suppliers found in the Excel data that don't match any of the 5
-        // authorized CV/UMKM — the API already skipped generating an invoice
-        // for these, we just need to tell the user which ones and where.
-        const unrecognized: string[] = []
+        setGenerating(true)
+        setProgress({ done: 0, total: selectedSheetNames.length })
 
         try {
-            let callsDone = 0
-            for (let i = 0; i < selectedSheetNames.length; i++) {
-                const sheetName = selectedSheetNames[i]
-                const sheet = sheets.find(s => s.sheetName === sheetName)
-                const cfg = configs[sheetName]
+            const { pdfs, unrecognized } = await generateVariant(initialDocType, true, done =>
+                setProgress({ done, total: selectedSheetNames.length })
+            )
 
-                if (!sheet?.data || !cfg) {
-                    toast.error(`Sheet "${sheetName}" tidak memiliki data`)
-                    continue
-                }
-
-                for (const docType of docTypesToGenerate) {
-                    // Each variant gets its own batch name (prefix swapped to match)
-                    // so the 2 PDFs for the same day/supplier never collide on download.
-                    const batchNameForCall = isSpecial && cfg.batchName
-                        ? withDocTypePrefix(cfg.batchName, sppgName, docType)
-                        : cfg.batchName
-
-                    const response = await fetch('/api/generate-pdf', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            parsedData: sheet.data,
-                            invoiceDate: format(cfg.invoiceDate, 'yyyy-MM-dd'),
-                            batchName: batchNameForCall || undefined,
-                            invoiceNumbers: cfg.invoiceNumbers,
-                            customerNames: cfg.customerNames,
-                            documentType: docType,
-                        }),
-                    })
-
-                    if (!response.ok) {
-                        const err = await response.json().catch(() => ({}))
-                        throw new Error(`Gagal generate "${sheet.label}": ${err.error || response.statusText}`)
-                    }
-
-                    const data = await response.json()
-                    data.pdfs.forEach((pdf: any) => {
-                        allPDFs.push({
-                            supplier: pdf.supplier,
-                            invoiceNumber: pdf.invoiceNumber,
-                            blob: base64ToBlob(pdf.blob, 'application/pdf'),
-                            sheetName,
-                            // groupLabel makes the preview sidebar + ZIP folder show the day this PDF belongs to
-                            // when the user generated multiple days at once.
-                            groupLabel: format(cfg.invoiceDate, 'dd-MM-yyyy'),
-                            // batchName is what the user typed in "Nama Batch" (prefix-adjusted per variant). Flows through to:
-                            //   - ZIP folder name (so ZIP structure mirrors what user sees in UI)
-                            //   - Single PDF download filename prefix
-                            //   - Merged PDF filename prefix
-                            batchName: batchNameForCall,
-                            documentType: docType,
-                        })
-                    })
-
-                    ;(data.unrecognizedSuppliers || []).forEach((supplier: string) => {
-                        unrecognized.push(`${supplier} (${sheet.label})`)
-                    })
-
-                    callsDone++
-                    setProgress({ done: callsDone, total: totalCalls })
-                }
-            }
-
-            setGeneratedPDFs(allPDFs)
+            setGeneratedPDFs(pdfs)
+            setActiveDocType(initialDocType)
+            setPdfsByDocType(initialDocType ? { [initialDocType]: pdfs } : {})
             setShowPreview(true)
-            toast.success(`Berhasil generate ${allPDFs.length} PDF dari ${selectedSheetNames.length} hari`)
+            toast.success(`Berhasil generate ${pdfs.length} PDF dari ${selectedSheetNames.length} hari`)
             if (unrecognized.length > 0) {
                 toast.error(
                     `${unrecognized.length} supplier tidak dikenali (bukan dari 5 CV/UMKM resmi), invoice-nya TIDAK di-generate: ${unrecognized.join(', ')}`,
@@ -404,6 +415,30 @@ export default function UploadPage() {
         }
     }
 
+    /** Preview toggle TAGIHAN ⇄ KWITANSI — renders the other variant on first use, cached after. */
+    const handleDocTypeChange = async (docType: DocType) => {
+        if (docType === activeDocType || switchingDocType) return
+        const cached = pdfsByDocType[docType]
+        if (cached) {
+            setActiveDocType(docType)
+            setGeneratedPDFs(cached)
+            return
+        }
+
+        setSwitchingDocType(true)
+        try {
+            const { pdfs } = await generateVariant(docType, false)
+            setPdfsByDocType(prev => ({ ...prev, [docType]: pdfs }))
+            setActiveDocType(docType)
+            setGeneratedPDFs(pdfs)
+        } catch (error: any) {
+            console.error('Error switching document type:', error)
+            toast.error(error.message || `Gagal generate ${docType.toUpperCase()}`)
+        } finally {
+            setSwitchingDocType(false)
+        }
+    }
+
     const handleClosePreview = () => {
         setShowPreview(false)
         setSheets([])
@@ -411,6 +446,8 @@ export default function UploadPage() {
         setConfigs({})
         setPreviewSheetName(null)
         setGeneratedPDFs([])
+        setActiveDocType(undefined)
+        setPdfsByDocType({})
     }
 
     /**
@@ -430,19 +467,20 @@ export default function UploadPage() {
         ).sort((a, b) => a.split('-').reverse().join('').localeCompare(b.split('-').reverse().join('')))
 
         const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
+        // Prefix follows the variant currently shown in the preview (TAGIHAN/KWITANSI).
+        const prefix = batchFilePrefix(sppgName, activeDocType)
         let zipBatchName: string | undefined
         if (groupLabels.length === 1) {
-            // Single date — find the sheet config whose date matches this groupLabel
-            // so we can reuse its batchName (which already has Operasional/Galon prefix when applicable).
+            // Single date — reuse the batchName the PDFs were generated with
+            // (already has Operasional/Galon + variant prefix when applicable).
             const target = groupLabels[0]
-            const matched = Object.values(configs).find(c => format(c.invoiceDate, 'dd-MM-yyyy') === target)
-            zipBatchName = matched?.batchName ?? `${batchFilePrefix(sppgName)} ${sppg} - ${target}`
+            zipBatchName = filteredPdfs.find(p => p.groupLabel === target)?.batchName ?? `${prefix} ${sppg} - ${target}`
         } else if (groupLabels.length > 1) {
             // Date range
-            zipBatchName = `${batchFilePrefix(sppgName)} ${sppg} - ${groupLabels[0]} sd ${groupLabels[groupLabels.length - 1]}`
+            zipBatchName = `${prefix} ${sppg} - ${groupLabels[0]} sd ${groupLabels[groupLabels.length - 1]}`
         } else {
             // No groupLabels (shouldn't happen in normal flow) — fallback
-            zipBatchName = configs[selectedSheetNames[0]]?.batchName
+            zipBatchName = filteredPdfs[0]?.batchName ?? configs[selectedSheetNames[0]]?.batchName
         }
 
         await downloadAllPDFs(filteredPdfs, zipBatchName)
@@ -524,7 +562,7 @@ export default function UploadPage() {
                                 <CardTitle>3. Pengaturan Invoice per Hari</CardTitle>
                                 <CardDescription>
                                     {selectedSheetNames.length === 1
-                                        ? 'Atur tanggal, batch name, nomor kwitansi, dan customer'
+                                        ? 'Atur tanggal, batch name, nomor invoice, dan customer'
                                         : `${selectedSheetNames.length} hari dipilih — atur masing-masing di tab di bawah`}
                                 </CardDescription>
                             </CardHeader>
@@ -551,63 +589,17 @@ export default function UploadPage() {
                                     </div>
                                 </div>
 
-                                {/* Document type checklist — only for Dapur Tambak/Sumpiuh/Buayan */}
-                                {isSpecialDapur(sppgName) && (
-                                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
-                                        <Label className="text-sm font-medium">Tipe Dokumen</Label>
-                                        <p className="text-xs text-muted-foreground -mt-1">
-                                            Dapur ini punya 2 varian — centang salah satu atau keduanya
-                                        </p>
-                                        <div className="flex flex-col gap-2 pt-1">
-                                            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                                <Checkbox
-                                                    checked={selectedDocTypes.has('tagihan')}
-                                                    onCheckedChange={(checked) => {
-                                                        setSelectedDocTypes(prev => {
-                                                            const next = new Set(prev)
-                                                            if (checked) next.add('tagihan')
-                                                            else next.delete('tagihan')
-                                                            return next
-                                                        })
-                                                    }}
-                                                />
-                                                <span>
-                                                    <span className="font-medium">TAGIHAN</span>{' '}
-                                                    <span className="text-muted-foreground">(softfile — ttd ada, tanpa cap LUNAS)</span>
-                                                </span>
-                                            </label>
-                                            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                                <Checkbox
-                                                    checked={selectedDocTypes.has('kwitansi')}
-                                                    onCheckedChange={(checked) => {
-                                                        setSelectedDocTypes(prev => {
-                                                            const next = new Set(prev)
-                                                            if (checked) next.add('kwitansi')
-                                                            else next.delete('kwitansi')
-                                                            return next
-                                                        })
-                                                    }}
-                                                />
-                                                <span>
-                                                    <span className="font-medium">KWITANSI</span>{' '}
-                                                    <span className="text-muted-foreground">(hardfile — tanpa ttd & cap LUNAS, label "Pembayaran")</span>
-                                                </span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Starting kwitansi number — applies across all selected sheets */}
+                                {/* Starting invoice number — applies across all selected sheets */}
                                 <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
                                     <div className="flex items-center justify-between gap-3 flex-wrap">
                                         <div className="flex-1 min-w-[200px]">
-                                            <Label className="text-sm font-medium">Nomor Kwitansi Awal</Label>
+                                            <Label className="text-sm font-medium">Nomor Invoice Awal</Label>
                                             <p className="text-xs text-muted-foreground mt-0.5">
                                                 Hari pertama mulai dari nomor ini — hari berikutnya berurutan otomatis
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-mono text-muted-foreground">#KWITANSI</span>
+                                            <span className="text-sm font-mono text-muted-foreground">#</span>
                                             <Input
                                                 type="number"
                                                 min={1}
@@ -699,7 +691,7 @@ export default function UploadPage() {
                                         </div>
 
                                         <div className="space-y-2 pt-2">
-                                            <Label>Nomor Kwitansi</Label>
+                                            <Label>Nomor Invoice</Label>
                                             <Input
                                                 value={Object.values(previewConfig.invoiceNumbers)[0] || ''}
                                                 onChange={(e) => {
@@ -713,7 +705,7 @@ export default function UploadPage() {
                                                         invoiceNumbers: newInvoiceNumbers,
                                                     })
                                                 }}
-                                                placeholder="#KWITANSI0916"
+                                                placeholder="#0916"
                                                 className="font-mono"
                                             />
                                             <p className="text-xs text-muted-foreground">
@@ -787,9 +779,12 @@ export default function UploadPage() {
                     onClose={handleClosePreview}
                     pdfs={generatedPDFs}
                     onDownload={handleDownloadPDFs}
+                    documentType={activeDocType}
+                    onDocumentTypeChange={handleDocTypeChange}
+                    documentTypeLoading={switchingDocType}
                     batchName={
                         selectedSheetNames.length === 1
-                            ? configs[selectedSheetNames[0]]?.batchName
+                            ? generatedPDFs[0]?.batchName ?? configs[selectedSheetNames[0]]?.batchName
                             : `${selectedSheetNames.length} hari`
                     }
                 />

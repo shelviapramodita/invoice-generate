@@ -63,13 +63,14 @@ export function formatDateLong(date: Date): string {
 
 /**
  * Generate invoice number with auto-increment
- * Format: #KWITANSI{XXXX}
+ * Format: #{XXXX} — general, tanpa prefix "KWITANSI" (dipakai juga untuk
+ * varian TAGIHAN/KWITANSI/FAKTUR).
  * @param sequence - Sequence number
- * @returns Invoice number (e.g., "#KWITANSI0001")
+ * @returns Invoice number (e.g., "#0001", "#1678")
  */
 export function generateInvoiceNumber(sequence: number): string {
     const paddedSequence = sequence.toString().padStart(4, '0')
-    return `#KWITANSI${paddedSequence}`
+    return `#${paddedSequence}`
 }
 
 /**
