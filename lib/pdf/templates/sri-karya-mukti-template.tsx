@@ -206,6 +206,10 @@ const styles = StyleSheet.create({
         marginBottom: 2,
         minHeight: 50,
     },
+    // Tanpa cap LUNAS (Tambak/Sumpiuh/Buayan): ttd di tengah garis, sejajar nama CV
+    signatureRowCentered: {
+        justifyContent: 'center',
+    },
     stamp: {
         width: 50,
         height: 50,
@@ -324,7 +328,7 @@ export function SriKaryaMuktiTemplate({
                     </View>
 
                     <View style={styles.signatureSection}>
-                        <View style={styles.signatureRow}>
+                        <View style={hideStamp ? [styles.signatureRow, styles.signatureRowCentered] : styles.signatureRow}>
                             {!hideSignature && (
                                 <Image
                                     src={getAssetPath('/assets/sri-karya-mukti/signature.png')}
