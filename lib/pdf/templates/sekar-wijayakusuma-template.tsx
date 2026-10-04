@@ -10,9 +10,10 @@ import {
 import { InvoiceItemForm } from '@/types'
 import {
     formatDate, formatNumber, getAssetPath,
-    getInvoiceTitle, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
+    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
     InvoiceDocType,
 } from '../utils'
+import { InvoiceMeta } from './invoice-meta'
 
 interface SekarWijayakusumaTemplateProps {
     invoiceNumber: string
@@ -69,22 +70,13 @@ const styles = StyleSheet.create({
         lineHeight: 1.3,
     },
     invoiceInfo: {
-        textAlign: 'right',
+        alignItems: 'flex-end',
     },
     invoiceTitle: {
         fontSize: 28, // Larger title
         fontWeight: 'bold',
         marginBottom: 4,
         color: '#4A2545', // Dark purple
-    },
-    invoiceNumber: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#000',
-    },
-    invoiceDate: {
-        fontSize: 10,
-        color: '#555',
     },
     customerSection: {
         marginBottom: 15,
@@ -256,10 +248,13 @@ export function SekarWijayakusumaTemplate({
                     </View>
                     <View style={styles.invoiceInfo}>
                         <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName, documentType)}</Text>
-                        <Text style={styles.invoiceNumber}>{invoiceNumber}</Text>
-                        <Text style={styles.invoiceDate}>
-                            TANGGAL: {formatDate(invoiceDate)}
-                        </Text>
+                        <InvoiceMeta
+                            numberLabel={getInvoiceNumberLabel(customerName, documentType)}
+                            invoiceNumber={invoiceNumber}
+                            invoiceDate={invoiceDate}
+                            accentColor="#7C3F73"
+                            tintColor="#F5EEF4"
+                        />
                     </View>
                 </View>
 

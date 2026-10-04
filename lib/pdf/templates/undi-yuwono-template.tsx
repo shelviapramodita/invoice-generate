@@ -10,9 +10,10 @@ import {
 import { InvoiceItemForm } from '@/types'
 import {
     formatDate, formatNumber, getAssetPath,
-    getInvoiceTitle, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
+    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
     InvoiceDocType,
 } from '../utils'
+import { InvoiceMeta } from './invoice-meta'
 
 interface UndiYuwonoTemplateProps {
     invoiceNumber: string
@@ -59,7 +60,7 @@ const styles = StyleSheet.create({
         color: '#666',
     },
     invoiceInfo: {
-        textAlign: 'right',
+        alignItems: 'flex-end',
         justifyContent: 'center',
     },
     invoiceTitle: {
@@ -67,15 +68,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginBottom: 4,
         color: '#333',
-    },
-    invoiceNumber: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#555',
-    },
-    invoiceDate: {
-        fontSize: 10,
-        color: '#666',
     },
     customerSection: {
         marginBottom: 15,
@@ -241,10 +233,13 @@ export function UndiYuwonoTemplate({
                     />
                     <View style={styles.invoiceInfo}>
                         <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName, documentType)}</Text>
-                        <Text style={styles.invoiceNumber}>{invoiceNumber}</Text>
-                        <Text style={styles.invoiceDate}>
-                            Tanggal: {formatDate(invoiceDate)}
-                        </Text>
+                        <InvoiceMeta
+                            numberLabel={getInvoiceNumberLabel(customerName, documentType)}
+                            invoiceNumber={invoiceNumber}
+                            invoiceDate={invoiceDate}
+                            accentColor="#4B5563"
+                            tintColor="#F3F4F6"
+                        />
                     </View>
                 </View>
 
