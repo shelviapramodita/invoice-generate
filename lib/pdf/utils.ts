@@ -116,6 +116,12 @@ export function getInvoiceTitle(customerName: string | undefined, docType?: Invo
     return docType === 'kwitansi' ? 'KWITANSI' : 'TAGIHAN'
 }
 
+/** Label nomor di header, mengikuti judul dokumen: "No. Faktur" / "No. Tagihan" / "No. Kwitansi". */
+export function getInvoiceNumberLabel(customerName: string | undefined, docType?: InvoiceDocType): string {
+    const title = getInvoiceTitle(customerName, docType)
+    return `No. ${title.charAt(0)}${title.slice(1).toLowerCase()}`
+}
+
 /** Hides ttd image, garis, nama, dan tanggal di bawahnya — cuma untuk varian KWITANSI. */
 export function shouldHideSignature(customerName: string | undefined, docType?: InvoiceDocType): boolean {
     return isSpecialDapur(customerName) && docType === 'kwitansi'

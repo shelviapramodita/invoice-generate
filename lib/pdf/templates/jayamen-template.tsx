@@ -11,9 +11,10 @@ import {
 import { InvoiceItemForm } from '@/types'
 import {
     formatCurrency, formatDate, formatNumber, getAssetPath,
-    getInvoiceTitle, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
+    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
     InvoiceDocType,
 } from '../utils'
+import { InvoiceMeta } from './invoice-meta'
 
 // Register fonts (optional - using default for now)
 // Font.register({
@@ -72,22 +73,13 @@ const styles = StyleSheet.create({
         lineHeight: 1.3,
     },
     invoiceInfo: {
-        textAlign: 'right',
+        alignItems: 'flex-end',
     },
     invoiceTitle: {
         fontSize: 28, // Increased for emphasis
         fontWeight: 'bold',
         marginBottom: 4,
         color: '#3F6212', // Darker green for title
-    },
-    invoiceNumber: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#000',
-    },
-    invoiceDate: {
-        fontSize: 10,
-        color: '#444',
     },
     customerSection: {
         marginBottom: 15,
@@ -267,10 +259,13 @@ export function JayamenTemplate({
                     </View>
                     <View style={styles.invoiceInfo}>
                         <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName, documentType)}</Text>
-                        <Text style={styles.invoiceNumber}>{invoiceNumber}</Text>
-                        <Text style={styles.invoiceDate}>
-                            TANGGAL: {formatDate(invoiceDate)}
-                        </Text>
+                        <InvoiceMeta
+                            numberLabel={getInvoiceNumberLabel(customerName, documentType)}
+                            invoiceNumber={invoiceNumber}
+                            invoiceDate={invoiceDate}
+                            accentColor="#84CC16"
+                            tintColor="#F0FDF4"
+                        />
                     </View>
                 </View>
 
