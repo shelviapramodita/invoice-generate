@@ -51,7 +51,7 @@ interface FullScreenPDFPreviewProps {
     onDownload: (filteredPdfs: GeneratedPDF[]) => void
     batchName?: string
     /**
-     * Dapur Tambak/Sumpiuh/Buayan only: variant currently shown. When set, a
+     * Variant currently shown (semua customer). When set, a
      * TAGIHAN/KWITANSI toggle appears in the header and calls
      * onDocumentTypeChange; the parent swaps `pdfs` for the chosen variant.
      */
@@ -231,8 +231,8 @@ export function FullScreenPDFPreview({
                     new Set(effectivePdfs.map(p => p.groupLabel).filter((g): g is string => !!g))
                 ).sort((a, b) => a.split('-').reverse().join('').localeCompare(b.split('-').reverse().join('')))
                 if (sortedDates.length >= 2) {
-                    // Kalau semua batch yang digabung sudah pakai prefix "Tagihan"
-                    // (Dapur Tambak), pertahankan; default "Kwitansi" untuk yang lain.
+                    // Prefix ikut varian: "Tagihan" kalau semua batch yang digabung
+                    // pakai prefix itu, selain itu "Kwitansi".
                     const prefix = uniqueBatches.every(b => b.trim().toUpperCase().startsWith('TAGIHAN'))
                         ? 'Tagihan'
                         : 'Kwitansi'
