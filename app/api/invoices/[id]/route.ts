@@ -241,10 +241,10 @@ export async function PATCH(
                     continue
                 }
 
-                // Dapur Tambak/Sumpiuh/Buayan: varian dokumen (TAGIHAN/KWITANSI)
-                // dipilih user saat generate awal, bukan disimpan per-invoice —
-                // regenerate dari sini (edit item lalu simpan) tidak tahu varian
-                // aslinya, jadi default ke 'tagihan' (ttd tetap ada, tanpa cap).
+                // Varian dokumen (TAGIHAN/KWITANSI) dipilih user di preview,
+                // bukan disimpan per-invoice — yang masuk history selalu
+                // TAGIHAN, jadi regenerate dari sini tanpa documentType =
+                // 'tagihan' (ttd tetap ada, tanpa cap LUNAS).
                 let template
                 switch (templateKey) {
                     case 'jayamen':

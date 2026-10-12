@@ -64,7 +64,7 @@ export function formatDateLong(date: Date): string {
 /**
  * Generate invoice number with auto-increment
  * Format: #{XXXX} — general, tanpa prefix "KWITANSI" (dipakai juga untuk
- * varian TAGIHAN/KWITANSI/FAKTUR).
+ * varian TAGIHAN/KWITANSI).
  * @param sequence - Sequence number
  * @returns Invoice number (e.g., "#0001", "#1678")
  */
@@ -93,49 +93,33 @@ export function resetSequence(start: number = 1) {
 }
 
 /**
- * Dapur Tambak, Sumpiuh, dan Buayan punya 2 varian dokumen yang user pilih
- * sendiri saat generate (bukan lagi berdasarkan tanggal cutoff):
- *   - 'tagihan'  (softfile): judul "TAGIHAN", ttd tetap ada, cap LUNAS hilang.
- *   - 'kwitansi' (hardfile): judul "KWITANSI", ttd & cap LUNAS hilang,
+ * Semua customer punya 2 varian dokumen yang user pilih sendiri lewat toggle
+ * di halaman preview (tidak ada lagi cap LUNAS di varian mana pun):
+ *   - 'tagihan'  (softfile): judul "TAGIHAN", ttd tetap ada.
+ *   - 'kwitansi' (hardfile): judul "KWITANSI", tanpa ttd,
  *     label "Tagihan Kepada" jadi "Pembayaran".
- * Customer lain selalu dapat invoice biasa ("FAKTUR", ttd + cap LUNAS
- * lengkap) — documentType diabaikan untuk mereka.
+ * documentType undefined (mis. regenerate dari /history) = 'tagihan'.
  */
 export type InvoiceDocType = 'tagihan' | 'kwitansi'
 
-const SPECIAL_DAPUR_KEYWORDS = ['TAMBAK', 'SUMPIUH', 'BUAYAN']
-
-export function isSpecialDapur(customerName: string | undefined): boolean {
-    if (!customerName) return false
-    const upper = customerName.toUpperCase()
-    return SPECIAL_DAPUR_KEYWORDS.some(k => upper.includes(k))
-}
-
-export function getInvoiceTitle(customerName: string | undefined, docType?: InvoiceDocType): string {
-    if (!isSpecialDapur(customerName)) return 'FAKTUR'
+export function getInvoiceTitle(docType?: InvoiceDocType): string {
     return docType === 'kwitansi' ? 'KWITANSI' : 'TAGIHAN'
 }
 
-/** Label nomor di header, mengikuti judul dokumen: "No. Faktur" / "No. Tagihan" / "No. Kwitansi". */
-export function getInvoiceNumberLabel(customerName: string | undefined, docType?: InvoiceDocType): string {
-    const title = getInvoiceTitle(customerName, docType)
+/** Label nomor di header, mengikuti judul dokumen: "No. Tagihan" / "No. Kwitansi". */
+export function getInvoiceNumberLabel(docType?: InvoiceDocType): string {
+    const title = getInvoiceTitle(docType)
     return `No. ${title.charAt(0)}${title.slice(1).toLowerCase()}`
 }
 
 /** Hides ttd image, garis, nama, dan tanggal di bawahnya — cuma untuk varian KWITANSI. */
-export function shouldHideSignature(customerName: string | undefined, docType?: InvoiceDocType): boolean {
-    return isSpecialDapur(customerName) && docType === 'kwitansi'
+export function shouldHideSignature(docType?: InvoiceDocType): boolean {
+    return docType === 'kwitansi'
 }
 
-/** Cap LUNAS hilang di KEDUA varian (TAGIHAN maupun KWITANSI) dapur-dapur ini. */
-export function shouldHideStamp(customerName: string | undefined): boolean {
-    return isSpecialDapur(customerName)
-}
-
-/** "Tagihan Kepada:" biasa, kecuali varian KWITANSI dapur-dapur ini → "Pembayaran". */
-export function getCustomerLabelPrefix(customerName: string | undefined, docType?: InvoiceDocType): string {
-    if (isSpecialDapur(customerName) && docType === 'kwitansi') return 'Pembayaran'
-    return 'Tagihan Kepada:'
+/** "Tagihan Kepada:" biasa, kecuali varian KWITANSI → "Pembayaran". */
+export function getCustomerLabelPrefix(docType?: InvoiceDocType): string {
+    return docType === 'kwitansi' ? 'Pembayaran' : 'Tagihan Kepada:'
 }
 
 /**

@@ -10,7 +10,7 @@ import {
 import { InvoiceItemForm } from '@/types'
 import {
     formatDate, formatNumber, getAssetPath,
-    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
+    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, getCustomerLabelPrefix,
     InvoiceDocType,
 } from '../utils'
 import { InvoiceMeta } from './invoice-meta'
@@ -20,8 +20,8 @@ interface UndiYuwonoTemplateProps {
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
-    // Dapur Tambak/Sumpiuh/Buayan punya 2 varian (lihat getInvoiceTitle() dkk
-    // di ../utils) — undefined/lainnya = invoice biasa (FAKTUR, ttd+cap lengkap).
+    // Varian dokumen TAGIHAN/KWITANSI (lihat getInvoiceTitle() dkk di ../utils)
+    // — undefined = TAGIHAN.
     documentType?: InvoiceDocType
 }
 
@@ -184,10 +184,6 @@ const styles = StyleSheet.create({
         marginBottom: 2,
         minHeight: 50,
     },
-    stamp: {
-        width: 50,
-        height: 50,
-    },
     signature: {
         width: 90,
         height: 45,
@@ -219,8 +215,7 @@ export function UndiYuwonoTemplate({
     documentType,
 }: UndiYuwonoTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
-    const hideSignature = shouldHideSignature(customerName, documentType)
-    const hideStamp = shouldHideStamp(customerName)
+    const hideSignature = shouldHideSignature(documentType)
 
     return (
         <Document>
@@ -232,9 +227,9 @@ export function UndiYuwonoTemplate({
                         style={styles.logo}
                     />
                     <View style={styles.invoiceInfo}>
-                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName, documentType)}</Text>
+                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(documentType)}</Text>
                         <InvoiceMeta
-                            numberLabel={getInvoiceNumberLabel(customerName, documentType)}
+                            numberLabel={getInvoiceNumberLabel(documentType)}
                             invoiceNumber={invoiceNumber}
                             invoiceDate={invoiceDate}
                             accentColor="#4B5563"
@@ -245,7 +240,7 @@ export function UndiYuwonoTemplate({
 
                 {/* Customer */}
                 <View style={styles.customerSection}>
-                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(customerName, documentType)}</Text>
+                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(documentType)}</Text>
                     <Text style={styles.customerName}>{customerName}</Text>
                 </View>
 
@@ -299,12 +294,6 @@ export function UndiYuwonoTemplate({
                                 <Image
                                     src={getAssetPath('/assets/undi-yuwono/signature.png')}
                                     style={styles.signature}
-                                />
-                            )}
-                            {!hideSignature && !hideStamp && (
-                                <Image
-                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                    style={styles.stamp}
                                 />
                             )}
                         </View>

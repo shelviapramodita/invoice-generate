@@ -10,7 +10,7 @@ import {
 import { InvoiceItemForm } from '@/types'
 import {
     formatDate, formatNumber, getAssetPath,
-    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
+    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, getCustomerLabelPrefix,
     InvoiceDocType,
 } from '../utils'
 import { InvoiceMeta } from './invoice-meta'
@@ -20,8 +20,8 @@ interface SriKaryaMuktiTemplateProps {
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
-    // Dapur Tambak/Sumpiuh/Buayan punya 2 varian (lihat getInvoiceTitle() dkk
-    // di ../utils) — undefined/lainnya = invoice biasa (FAKTUR, ttd+cap lengkap).
+    // Varian dokumen TAGIHAN/KWITANSI (lihat getInvoiceTitle() dkk di ../utils)
+    // — undefined = TAGIHAN.
     documentType?: InvoiceDocType
 }
 
@@ -191,20 +191,12 @@ const styles = StyleSheet.create({
     },
     signatureRow: {
         flexDirection: 'row',
-        justifyContent: 'flex-end',
+        justifyContent: 'center',
         alignItems: 'flex-end',
         gap: 15,
         width: '100%',
         marginBottom: 2,
         minHeight: 50,
-    },
-    // Tanpa cap LUNAS (Tambak/Sumpiuh/Buayan): ttd di tengah garis, sejajar nama CV
-    signatureRowCentered: {
-        justifyContent: 'center',
-    },
-    stamp: {
-        width: 50,
-        height: 50,
     },
     signature: {
         width: 90,
@@ -238,8 +230,7 @@ export function SriKaryaMuktiTemplate({
     documentType,
 }: SriKaryaMuktiTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
-    const hideSignature = shouldHideSignature(customerName, documentType)
-    const hideStamp = shouldHideStamp(customerName)
+    const hideSignature = shouldHideSignature(documentType)
 
     return (
         <Document>
@@ -259,9 +250,9 @@ export function SriKaryaMuktiTemplate({
                         </View>
                     </View>
                     <View style={styles.invoiceInfo}>
-                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName, documentType)}</Text>
+                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(documentType)}</Text>
                         <InvoiceMeta
-                            numberLabel={getInvoiceNumberLabel(customerName, documentType)}
+                            numberLabel={getInvoiceNumberLabel(documentType)}
                             invoiceNumber={invoiceNumber}
                             invoiceDate={invoiceDate}
                             accentColor="#EA580C"
@@ -272,7 +263,7 @@ export function SriKaryaMuktiTemplate({
 
                 {/* Customer */}
                 <View style={styles.customerSection}>
-                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(customerName, documentType)} {customerName}</Text>
+                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(documentType)} {customerName}</Text>
                 </View>
 
                 {/* Table */}
@@ -323,17 +314,11 @@ export function SriKaryaMuktiTemplate({
                     </View>
 
                     <View style={styles.signatureSection}>
-                        <View style={hideStamp ? [styles.signatureRow, styles.signatureRowCentered] : styles.signatureRow}>
+                        <View style={styles.signatureRow}>
                             {!hideSignature && (
                                 <Image
                                     src={getAssetPath('/assets/sri-karya-mukti/signature.png')}
                                     style={styles.signature}
-                                />
-                            )}
-                            {!hideSignature && !hideStamp && (
-                                <Image
-                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                    style={styles.stamp}
                                 />
                             )}
                         </View>

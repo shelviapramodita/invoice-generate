@@ -10,7 +10,7 @@ import {
 import { InvoiceItemForm } from '@/types'
 import {
     formatDate, formatNumber, getAssetPath,
-    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, shouldHideStamp, getCustomerLabelPrefix,
+    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, getCustomerLabelPrefix,
     InvoiceDocType,
 } from '../utils'
 import { InvoiceMeta } from './invoice-meta'
@@ -24,8 +24,8 @@ interface SekarWijayakusumaTemplateProps {
     // supplier ini atas nama pemilik rekening ("SUSILO WIDYONO") bukan nama
     // CV-nya, tapi logo/header/info pembayaran tetap sama persis.
     signatureName?: string
-    // Dapur Tambak/Sumpiuh/Buayan punya 2 varian (lihat getInvoiceTitle() dkk
-    // di ../utils) — undefined/lainnya = invoice biasa (FAKTUR, ttd+cap lengkap).
+    // Varian dokumen TAGIHAN/KWITANSI (lihat getInvoiceTitle() dkk di ../utils)
+    // — undefined = TAGIHAN.
     documentType?: InvoiceDocType
 }
 
@@ -190,10 +190,6 @@ const styles = StyleSheet.create({
         marginBottom: 2,
         minHeight: 50,
     },
-    stamp: {
-        width: 50,
-        height: 50,
-    },
     signature: {
         width: 90,
         height: 45,
@@ -226,8 +222,7 @@ export function SekarWijayakusumaTemplate({
     documentType,
 }: SekarWijayakusumaTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
-    const hideSignature = shouldHideSignature(customerName, documentType)
-    const hideStamp = shouldHideStamp(customerName)
+    const hideSignature = shouldHideSignature(documentType)
 
     return (
         <Document>
@@ -247,9 +242,9 @@ export function SekarWijayakusumaTemplate({
                         </View>
                     </View>
                     <View style={styles.invoiceInfo}>
-                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(customerName, documentType)}</Text>
+                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(documentType)}</Text>
                         <InvoiceMeta
-                            numberLabel={getInvoiceNumberLabel(customerName, documentType)}
+                            numberLabel={getInvoiceNumberLabel(documentType)}
                             invoiceNumber={invoiceNumber}
                             invoiceDate={invoiceDate}
                             accentColor="#7C3F73"
@@ -260,7 +255,7 @@ export function SekarWijayakusumaTemplate({
 
                 {/* Customer */}
                 <View style={styles.customerSection}>
-                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(customerName, documentType)} {customerName}</Text>
+                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(documentType)} {customerName}</Text>
                 </View>
 
                 {/* Table */}
@@ -313,12 +308,6 @@ export function SekarWijayakusumaTemplate({
                                 <Image
                                     src={getAssetPath('/assets/sekar-wijayakusuma/signature.png')}
                                     style={styles.signature}
-                                />
-                            )}
-                            {!hideSignature && !hideStamp && (
-                                <Image
-                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
-                                    style={styles.stamp}
                                 />
                             )}
                         </View>

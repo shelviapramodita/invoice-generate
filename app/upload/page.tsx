@@ -46,51 +46,44 @@ interface GeneratedPDFEntry {
     documentType?: DocType
 }
 
-// Only relevant for Dapur Tambak/Sumpiuh/Buayan — which of the 2 variants is
-// shown in the preview (see InvoiceDocType in lib/pdf/utils.ts — kept as a plain string
-// union here, duplicated manually, because that file isn't safe to import
-// into a client component).
+// Which of the 2 document variants is shown in the preview (see
+// InvoiceDocType in lib/pdf/utils.ts — kept as a plain string union here,
+// duplicated manually, because that file isn't safe to import into a client
+// component).
 type DocType = 'tagihan' | 'kwitansi'
 
 /**
- * Dapur Tambak, Sumpiuh, dan Buayan punya 2 varian dokumen yang user pilih
- * sendiri lewat toggle di halaman preview: TAGIHAN (softfile, ttd tetap ada
- * tanpa cap LUNAS) dan KWITANSI (hardfile, tanpa ttd & cap LUNAS, label
- * "Pembayaran").
- * Customer lain selalu invoice biasa (FAKTUR).
+ * Semua customer punya 2 varian dokumen yang user pilih sendiri lewat toggle
+ * di halaman preview: TAGIHAN (softfile, ttd ada, tanpa cap LUNAS) dan
+ * KWITANSI (hardfile, tanpa ttd & cap LUNAS, label "Pembayaran").
+ * File/batch name prefix "Tagihan"/"Kwitansi" ikut varian (default TAGIHAN).
  */
-function isSpecialDapur(sppgName: string): boolean {
-    const upper = sppgName.toUpperCase()
-    return upper.includes('TAMBAK') || upper.includes('SUMPIUH') || upper.includes('BUAYAN')
-}
-
-/** File/batch name prefix: "Tagihan"/"Kwitansi" ikut varian dokumen untuk 3 dapur ini, selalu "Kwitansi" untuk customer lain. */
-function batchFilePrefix(sppgName: string, docType?: DocType): string {
-    if (!isSpecialDapur(sppgName)) return 'Kwitansi'
+function batchFilePrefix(docType?: DocType): string {
     return docType === 'kwitansi' ? 'Kwitansi' : 'Tagihan'
 }
 
 /** Ganti prefix "Tagihan"/"Kwitansi" di awal sebuah batch name yang sudah ada, tanpa mengubah sisanya (mis. edit user). */
-function withDocTypePrefix(batchName: string, sppgName: string, docType?: DocType): string {
-    const desired = batchFilePrefix(sppgName, docType)
+function withDocTypePrefix(batchName: string, docType: DocType): string {
+    const desired = batchFilePrefix(docType)
     const stripped = batchName.replace(/^(Tagihan|Kwitansi)\s+/i, '')
     return `${desired} ${stripped}`
 }
 
 /**
  * Build the auto-detected batch name for a sheet.
- * Format: "Kwitansi SPPG <Name> - [<Category> ]DD/MM/YYYY[ (Tahap N)]"
+ * Format: "Tagihan SPPG <Name> - [<Category> ]DD/MM/YYYY[ (Tahap N)]"
+ * (prefix diganti "Kwitansi" saat generate varian KWITANSI)
  *   "RAB SPPG Tambak.xlsx" + "8 APRIL 2026 DONE" → "Tagihan SPPG Tambak - 08/04/2026"
  *   "RAB SPPG Tambak.xlsx" + "OPS 8 APRIL 2026" → "Tagihan SPPG Tambak - Operasional 08/04/2026"
  *   "RAB SPPG Tambak.xlsx" + "OPS GALON 8 APRIL 2026" → "Tagihan SPPG Tambak - Operasional Galon 08/04/2026"
- *   "RAB SPPG Buayan.xlsx" + "7 SEPTEMBER TAHAP 2" → "Kwitansi SPPG Buayan - 07/09/2026 (Tahap 2)"
+ *   "RAB SPPG Buayan.xlsx" + "7 SEPTEMBER TAHAP 2" → "Tagihan SPPG Buayan - 07/09/2026 (Tahap 2)"
  */
 function defaultBatchName(date: Date, sppgName: string, category?: SheetCategory, tahap?: number): string {
     const dateStr = format(date, 'dd/MM/yyyy')
     const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
     const categoryStr = category ? `${CATEGORY_LABELS[category]} ` : ''
     const tahapStr = tahap ? ` (Tahap ${tahap})` : ''
-    return `${batchFilePrefix(sppgName)} ${sppg} - ${categoryStr}${dateStr}${tahapStr}`
+    return `${batchFilePrefix()} ${sppg} - ${categoryStr}${dateStr}${tahapStr}`
 }
 
 /** Format an integer into a general "#0001"-style invoice number (4-digit zero-padded, no "KWITANSI" prefix). */
@@ -138,8 +131,8 @@ export default function UploadPage() {
     const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
     const [showPreview, setShowPreview] = useState(false)
     const [generatedPDFs, setGeneratedPDFs] = useState<GeneratedPDFEntry[]>([])
-    // Dapur Tambak/Sumpiuh/Buayan only: which variant the preview is showing
-    // (undefined = customer biasa, no toggle). The other variant is generated
+    // Which variant the preview is showing (undefined = belum generate).
+    // The other variant is generated
     // lazily the first time the user switches to it, then cached here so
     // switching back and forth is instant.
     const [activeDocType, setActiveDocType] = useState<DocType | undefined>(undefined)
@@ -285,11 +278,10 @@ export default function UploadPage() {
      * toggle, so the same day doesn't get 2 rows in /history.
      */
     const generateVariant = async (
-        docType: DocType | undefined,
+        docType: DocType,
         saveHistory: boolean,
         onSheetDone?: (done: number) => void,
     ): Promise<{ pdfs: GeneratedPDFEntry[]; unrecognized: string[] }> => {
-        const isSpecial = docType !== undefined
         const pdfs: GeneratedPDFEntry[] = []
         const unrecognized: string[] = []
 
@@ -305,8 +297,8 @@ export default function UploadPage() {
 
             // Prefix batch name ("Tagihan"/"Kwitansi") follows the variant so
             // downloads of the 2 variants never collide.
-            const batchNameForCall = isSpecial && cfg.batchName
-                ? withDocTypePrefix(cfg.batchName, sppgName, docType)
+            const batchNameForCall = cfg.batchName
+                ? withDocTypePrefix(cfg.batchName, docType)
                 : cfg.batchName
 
             const response = await fetch('/api/generate-pdf', {
@@ -383,9 +375,9 @@ export default function UploadPage() {
         })
         localStorage.setItem(STORAGE_KEY, JSON.stringify(recentNames.slice(0, MAX_RECENT)))
 
-        // Dapur Tambak/Sumpiuh/Buayan start on TAGIHAN; the user can switch to
-        // KWITANSI from the preview. Other customers have no variant.
-        const initialDocType: DocType | undefined = isSpecialDapur(sppgName) ? 'tagihan' : undefined
+        // Selalu mulai dari TAGIHAN (yang disimpan ke history); user bisa
+        // switch ke KWITANSI dari preview.
+        const initialDocType: DocType = 'tagihan'
 
         setGenerating(true)
         setProgress({ done: 0, total: selectedSheetNames.length })
@@ -397,7 +389,7 @@ export default function UploadPage() {
 
             setGeneratedPDFs(pdfs)
             setActiveDocType(initialDocType)
-            setPdfsByDocType(initialDocType ? { [initialDocType]: pdfs } : {})
+            setPdfsByDocType({ [initialDocType]: pdfs })
             setShowPreview(true)
             toast.success(`Berhasil generate ${pdfs.length} PDF dari ${selectedSheetNames.length} hari`)
             if (unrecognized.length > 0) {
@@ -468,7 +460,7 @@ export default function UploadPage() {
 
         const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
         // Prefix follows the variant currently shown in the preview (TAGIHAN/KWITANSI).
-        const prefix = batchFilePrefix(sppgName, activeDocType)
+        const prefix = batchFilePrefix(activeDocType)
         let zipBatchName: string | undefined
         if (groupLabels.length === 1) {
             // Single date — reuse the batchName the PDFs were generated with

@@ -23,8 +23,8 @@ export interface PDFGenerationOptions {
     customerName?: string
     customerNames?: Record<string, string>
     invoiceNumbers?: Record<string, string>
-    // Only relevant for Dapur Tambak/Sumpiuh/Buayan — which of the 2 variants
-    // to render (see InvoiceDocType in ./utils). Ignored for other customers.
+    // Which of the 2 variants to render (see InvoiceDocType in ./utils).
+    // undefined = TAGIHAN.
     documentType?: InvoiceDocType
 }
 
@@ -40,7 +40,7 @@ export interface GeneratedPDF {
     // filename prefix for single-PDF downloads so the user gets neat,
     // consistent file naming that matches what they typed in the UI.
     batchName?: string
-    // Which variant this PDF is, when generated for one of the 3 special dapur.
+    // Which variant this PDF is (TAGIHAN/KWITANSI).
     documentType?: InvoiceDocType
 }
 
