@@ -1,6 +1,7 @@
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import path from 'path'
+import type { RenderedDocType } from './doc-variant'
 
 /**
  * Get the absolute path for assets (works in server-side rendering)
@@ -92,33 +93,35 @@ export function resetSequence(start: number = 1) {
     currentSequence = start
 }
 
-/**
- * Semua customer punya 2 varian dokumen yang user pilih sendiri lewat toggle
- * di halaman preview (tidak ada lagi cap LUNAS di varian mana pun):
- *   - 'tagihan'  (softfile): judul "TAGIHAN", ttd tetap ada.
- *   - 'kwitansi' (hardfile): judul "KWITANSI", tanpa ttd,
- *     label "Tagihan Kepada" jadi "Pembayaran".
- * documentType undefined (mis. regenerate dari /history) = 'tagihan'.
- */
-export type InvoiceDocType = 'tagihan' | 'kwitansi'
+// Aturan varian (TAGIHAN/KWITANSI vs FAKTUR lama, cutoff tanggal) ada di
+// ./doc-variant. Template memanggil resolveDocType() sekali, lalu helper di
+// bawah menerima hasilnya.
+export type { InvoiceDocType, RenderedDocType } from './doc-variant'
+export { resolveDocType } from './doc-variant'
 
-export function getInvoiceTitle(docType?: InvoiceDocType): string {
+export function getInvoiceTitle(docType: RenderedDocType): string {
+    if (docType === 'faktur') return 'FAKTUR'
     return docType === 'kwitansi' ? 'KWITANSI' : 'TAGIHAN'
 }
 
-/** Label nomor di header, mengikuti judul dokumen: "No. Tagihan" / "No. Kwitansi". */
-export function getInvoiceNumberLabel(docType?: InvoiceDocType): string {
+/** Label nomor di header, mengikuti judul dokumen: "No. Faktur" / "No. Tagihan" / "No. Kwitansi". */
+export function getInvoiceNumberLabel(docType: RenderedDocType): string {
     const title = getInvoiceTitle(docType)
     return `No. ${title.charAt(0)}${title.slice(1).toLowerCase()}`
 }
 
 /** Hides ttd image, garis, nama, dan tanggal di bawahnya — cuma untuk varian KWITANSI. */
-export function shouldHideSignature(docType?: InvoiceDocType): boolean {
+export function shouldHideSignature(docType: RenderedDocType): boolean {
     return docType === 'kwitansi'
 }
 
+/** Cap LUNAS cuma ada di FAKTUR lama (customer lain, invoice ≤ 12 Okt 2026). */
+export function shouldShowStamp(docType: RenderedDocType): boolean {
+    return docType === 'faktur'
+}
+
 /** "Tagihan Kepada:" biasa, kecuali varian KWITANSI → "Pembayaran". */
-export function getCustomerLabelPrefix(docType?: InvoiceDocType): string {
+export function getCustomerLabelPrefix(docType: RenderedDocType): string {
     return docType === 'kwitansi' ? 'Pembayaran' : 'Tagihan Kepada:'
 }
 
