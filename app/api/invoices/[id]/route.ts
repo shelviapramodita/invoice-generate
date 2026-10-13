@@ -244,7 +244,9 @@ export async function PATCH(
                 // Varian dokumen (TAGIHAN/KWITANSI) dipilih user di preview,
                 // bukan disimpan per-invoice — yang masuk history selalu
                 // TAGIHAN, jadi regenerate dari sini tanpa documentType =
-                // 'tagihan' (ttd tetap ada, tanpa cap LUNAS).
+                // 'tagihan' (ttd tetap ada, tanpa cap LUNAS). Invoice lama
+                // customer biasa (≤ 12 Okt 2026) otomatis tetap FAKTUR
+                // (ttd + cap LUNAS) — template yang menentukan dari tanggal.
                 let template
                 switch (templateKey) {
                     case 'jayamen':

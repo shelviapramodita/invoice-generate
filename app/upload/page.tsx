@@ -16,6 +16,7 @@ import { FullScreenPDFPreview } from '@/components/invoice/fullscreen-pdf-previe
 import { CustomerNameInput } from '@/components/invoice/customer-name-input'
 import { SheetEntry, SheetCategory } from '@/types'
 import { extractSppgNameFromFilename } from '@/lib/text-normalizer'
+import { usesLegacyFaktur, type InvoiceDocType } from '@/lib/pdf/doc-variant'
 import type { GeneratedPDF } from '@/lib/pdf/pdf-generator'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
@@ -46,25 +47,26 @@ interface GeneratedPDFEntry {
     documentType?: DocType
 }
 
-// Which of the 2 document variants is shown in the preview (see
-// InvoiceDocType in lib/pdf/utils.ts — kept as a plain string union here,
-// duplicated manually, because that file isn't safe to import into a client
-// component).
-type DocType = 'tagihan' | 'kwitansi'
+// Which of the 2 document variants is shown in the preview.
+type DocType = InvoiceDocType
 
 /**
- * Semua customer punya 2 varian dokumen yang user pilih sendiri lewat toggle
- * di halaman preview: TAGIHAN (softfile, ttd ada, tanpa cap LUNAS) dan
- * KWITANSI (hardfile, tanpa ttd & cap LUNAS, label "Pembayaran").
+ * 2 varian dokumen yang user pilih sendiri lewat toggle di halaman preview:
+ * TAGIHAN (softfile, ttd ada, tanpa cap LUNAS) dan KWITANSI (hardfile, tanpa
+ * ttd & cap LUNAS, label "Pembayaran"). Berlaku untuk Tambak/Sumpiuh/Buayan,
+ * dan untuk customer lain mulai invoice 13 Okt 2026 — sebelumnya customer
+ * lain tetap FAKTUR lama (ttd + cap LUNAS, prefix "Kwitansi", tanpa toggle);
+ * lihat usesLegacyFaktur di lib/pdf/doc-variant.ts.
  * File/batch name prefix "Tagihan"/"Kwitansi" ikut varian (default TAGIHAN).
  */
-function batchFilePrefix(docType?: DocType): string {
+function batchFilePrefix(docType?: DocType, legacy = false): string {
+    if (legacy) return 'Kwitansi'
     return docType === 'kwitansi' ? 'Kwitansi' : 'Tagihan'
 }
 
 /** Ganti prefix "Tagihan"/"Kwitansi" di awal sebuah batch name yang sudah ada, tanpa mengubah sisanya (mis. edit user). */
-function withDocTypePrefix(batchName: string, docType: DocType): string {
-    const desired = batchFilePrefix(docType)
+function withDocTypePrefix(batchName: string, docType: DocType, legacy = false): string {
+    const desired = batchFilePrefix(docType, legacy)
     const stripped = batchName.replace(/^(Tagihan|Kwitansi)\s+/i, '')
     return `${desired} ${stripped}`
 }
@@ -83,7 +85,7 @@ function defaultBatchName(date: Date, sppgName: string, category?: SheetCategory
     const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
     const categoryStr = category ? `${CATEGORY_LABELS[category]} ` : ''
     const tahapStr = tahap ? ` (Tahap ${tahap})` : ''
-    return `${batchFilePrefix()} ${sppg} - ${categoryStr}${dateStr}${tahapStr}`
+    return `${batchFilePrefix(undefined, usesLegacyFaktur(sppg, date))} ${sppg} - ${categoryStr}${dateStr}${tahapStr}`
 }
 
 /** Format an integer into a general "#0001"-style invoice number (4-digit zero-padded, no "KWITANSI" prefix). */
@@ -98,6 +100,13 @@ function formatInvoiceNumber(n: number): string {
  * the auto-recompute effect — here we just set a placeholder that gets
  * overwritten as soon as the user selects this sheet.
  */
+/** Sheet ini masih FAKTUR lama kalau semua supplier-nya "Tagihan Kepada" customer biasa & tanggal ≤ 12 Okt 2026. */
+function isLegacySheet(cfg: SheetConfig): boolean {
+    const names = Object.values(cfg.customerNames)
+    if (names.length === 0) return usesLegacyFaktur(undefined, cfg.invoiceDate)
+    return names.every(name => usesLegacyFaktur(name, cfg.invoiceDate))
+}
+
 function buildSheetConfig(sheet: SheetEntry, sppgName: string): SheetConfig {
     const date = sheet.detectedDate ? new Date(sheet.detectedDate + 'T12:00:00') : new Date()
     const numbers: Record<string, string> = {}
@@ -297,8 +306,10 @@ export default function UploadPage() {
 
             // Prefix batch name ("Tagihan"/"Kwitansi") follows the variant so
             // downloads of the 2 variants never collide.
+            // FAKTUR lama selalu "Kwitansi" (seperti sebelum skema baru).
+            const legacy = isLegacySheet(cfg)
             const batchNameForCall = cfg.batchName
-                ? withDocTypePrefix(cfg.batchName, docType)
+                ? withDocTypePrefix(cfg.batchName, docType, legacy)
                 : cfg.batchName
 
             const response = await fetch('/api/generate-pdf', {
@@ -335,7 +346,8 @@ export default function UploadPage() {
                     //   - Single PDF download filename prefix
                     //   - Merged PDF filename prefix
                     batchName: batchNameForCall,
-                    documentType: docType,
+                    // FAKTUR lama tidak punya varian — jangan dilabeli TAGIHAN/KWITANSI.
+                    documentType: legacy ? undefined : docType,
                 })
             })
 
@@ -387,9 +399,12 @@ export default function UploadPage() {
                 setProgress({ done, total: selectedSheetNames.length })
             )
 
+            // Toggle varian cuma muncul kalau ada sheet yang ikut skema baru;
+            // kalau semua sheet FAKTUR lama, tidak ada varian yang bisa dipilih.
+            const hasVariants = selectedSheetNames.some(name => configs[name] && !isLegacySheet(configs[name]))
             setGeneratedPDFs(pdfs)
-            setActiveDocType(initialDocType)
-            setPdfsByDocType({ [initialDocType]: pdfs })
+            setActiveDocType(hasVariants ? initialDocType : undefined)
+            setPdfsByDocType(hasVariants ? { [initialDocType]: pdfs } : {})
             setShowPreview(true)
             toast.success(`Berhasil generate ${pdfs.length} PDF dari ${selectedSheetNames.length} hari`)
             if (unrecognized.length > 0) {
@@ -459,8 +474,9 @@ export default function UploadPage() {
         ).sort((a, b) => a.split('-').reverse().join('').localeCompare(b.split('-').reverse().join('')))
 
         const sppg = sppgName ? `SPPG ${sppgName}` : 'SPPG'
-        // Prefix follows the variant currently shown in the preview (TAGIHAN/KWITANSI).
-        const prefix = batchFilePrefix(activeDocType)
+        // Prefix follows the variant currently shown in the preview (TAGIHAN/KWITANSI);
+        // "Kwitansi" kalau semua PDF-nya FAKTUR lama (tanpa varian).
+        const prefix = batchFilePrefix(activeDocType, filteredPdfs.every(p => !p.documentType))
         let zipBatchName: string | undefined
         if (groupLabels.length === 1) {
             // Single date — reuse the batchName the PDFs were generated with

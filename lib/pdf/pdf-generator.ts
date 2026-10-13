@@ -23,8 +23,9 @@ export interface PDFGenerationOptions {
     customerName?: string
     customerNames?: Record<string, string>
     invoiceNumbers?: Record<string, string>
-    // Which of the 2 variants to render (see InvoiceDocType in ./utils).
-    // undefined = TAGIHAN.
+    // Which of the 2 variants to render (see InvoiceDocType in ./doc-variant).
+    // undefined = TAGIHAN. Diabaikan untuk invoice lama customer biasa
+    // (≤ 12 Okt 2026) — template me-render FAKTUR lama (ttd + cap LUNAS).
     documentType?: InvoiceDocType
 }
 

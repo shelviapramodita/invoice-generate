@@ -10,8 +10,8 @@ import {
 import { InvoiceItemForm } from '@/types'
 import {
     formatDate, formatNumber, getAssetPath,
-    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, getCustomerLabelPrefix,
-    InvoiceDocType,
+    getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, shouldShowStamp, getCustomerLabelPrefix,
+    resolveDocType, InvoiceDocType,
 } from '../utils'
 import { InvoiceMeta } from './invoice-meta'
 
@@ -20,8 +20,8 @@ interface UdHidayatTemplateProps {
     invoiceDate: Date
     items: InvoiceItemForm[]
     customerName?: string
-    // Varian dokumen TAGIHAN/KWITANSI (lihat getInvoiceTitle() dkk di ../utils)
-    // — undefined = TAGIHAN.
+    // Varian dokumen TAGIHAN/KWITANSI — undefined = TAGIHAN. Diabaikan untuk
+    // invoice lama customer biasa (FAKTUR, lihat resolveDocType di ../doc-variant).
     documentType?: InvoiceDocType
 }
 
@@ -198,6 +198,14 @@ const styles = StyleSheet.create({
         marginBottom: 2,
         minHeight: 50,
     },
+    // FAKTUR lama: ttd + cap LUNAS rata kanan (tanpa cap, ttd di tengah garis)
+    signatureRowWithStamp: {
+        justifyContent: 'flex-end',
+    },
+    stamp: {
+        width: 50,
+        height: 50,
+    },
     signature: {
         width: 90,
         height: 45,
@@ -230,7 +238,9 @@ export function UdHidayatTemplate({
     documentType,
 }: UdHidayatTemplateProps) {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0)
-    const hideSignature = shouldHideSignature(documentType)
+    const docType = resolveDocType(customerName, invoiceDate, documentType)
+    const hideSignature = shouldHideSignature(docType)
+    const showStamp = shouldShowStamp(docType)
 
     return (
         <Document>
@@ -250,9 +260,9 @@ export function UdHidayatTemplate({
                         </View>
                     </View>
                     <View style={styles.invoiceInfo}>
-                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(documentType)}</Text>
+                        <Text style={styles.invoiceTitle}>{getInvoiceTitle(docType)}</Text>
                         <InvoiceMeta
-                            numberLabel={getInvoiceNumberLabel(documentType)}
+                            numberLabel={getInvoiceNumberLabel(docType)}
                             invoiceNumber={invoiceNumber}
                             invoiceDate={invoiceDate}
                             accentColor="#0284C7"
@@ -263,7 +273,7 @@ export function UdHidayatTemplate({
 
                 {/* Customer */}
                 <View style={styles.customerSection}>
-                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(documentType)} {customerName}</Text>
+                    <Text style={styles.customerLabel}>{getCustomerLabelPrefix(docType)} {customerName}</Text>
                 </View>
 
                 {/* Table */}
@@ -314,11 +324,17 @@ export function UdHidayatTemplate({
                     </View>
 
                     <View style={styles.signatureSection}>
-                        <View style={styles.signatureRow}>
+                        <View style={showStamp ? [styles.signatureRow, styles.signatureRowWithStamp] : styles.signatureRow}>
                             {!hideSignature && (
                                 <Image
                                     src={getAssetPath('/assets/ud-hidayat/signature.png')}
                                     style={styles.signature}
+                                />
+                            )}
+                            {!hideSignature && showStamp && (
+                                <Image
+                                    src={getAssetPath('/assets/common/stamp-lunas.png')}
+                                    style={styles.stamp}
                                 />
                             )}
                         </View>
