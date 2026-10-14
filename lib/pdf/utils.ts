@@ -115,7 +115,7 @@ export function shouldHideSignature(docType: RenderedDocType): boolean {
     return docType === 'kwitansi'
 }
 
-/** Cap LUNAS cuma ada di FAKTUR lama (customer lain, invoice ≤ 12 Okt 2026). */
+/** Cap LUNAS cuma ada di FAKTUR lama (customer lain, invoice ≤ 11 Okt 2026). */
 export function shouldShowStamp(docType: RenderedDocType): boolean {
     return docType === 'faktur'
 }

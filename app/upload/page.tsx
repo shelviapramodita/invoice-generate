@@ -54,7 +54,7 @@ type DocType = InvoiceDocType
  * 2 varian dokumen yang user pilih sendiri lewat toggle di halaman preview:
  * TAGIHAN (softfile, ttd ada, tanpa cap LUNAS) dan KWITANSI (hardfile, tanpa
  * ttd & cap LUNAS, label "Pembayaran"). Berlaku untuk Tambak/Sumpiuh/Buayan,
- * dan untuk customer lain mulai invoice 13 Okt 2026 — sebelumnya customer
+ * dan untuk customer lain mulai invoice 12 Okt 2026 — sebelumnya customer
  * lain tetap FAKTUR lama (ttd + cap LUNAS, prefix "Kwitansi", tanpa toggle);
  * lihat usesLegacyFaktur di lib/pdf/doc-variant.ts.
  * File/batch name prefix "Tagihan"/"Kwitansi" ikut varian (default TAGIHAN).
@@ -100,7 +100,7 @@ function formatInvoiceNumber(n: number): string {
  * the auto-recompute effect — here we just set a placeholder that gets
  * overwritten as soon as the user selects this sheet.
  */
-/** Sheet ini masih FAKTUR lama kalau semua supplier-nya "Tagihan Kepada" customer biasa & tanggal ≤ 12 Okt 2026. */
+/** Sheet ini masih FAKTUR lama kalau semua supplier-nya "Tagihan Kepada" customer biasa & tanggal ≤ 11 Okt 2026. */
 function isLegacySheet(cfg: SheetConfig): boolean {
     const names = Object.values(cfg.customerNames)
     if (names.length === 0) return usesLegacyFaktur(undefined, cfg.invoiceDate)

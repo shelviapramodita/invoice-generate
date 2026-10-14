@@ -25,7 +25,7 @@ export interface PDFGenerationOptions {
     invoiceNumbers?: Record<string, string>
     // Which of the 2 variants to render (see InvoiceDocType in ./doc-variant).
     // undefined = TAGIHAN. Diabaikan untuk invoice lama customer biasa
-    // (≤ 12 Okt 2026) — template me-render FAKTUR lama (ttd + cap LUNAS).
+    // (≤ 11 Okt 2026) — template me-render FAKTUR lama (ttd + cap LUNAS).
     documentType?: InvoiceDocType
 }
 
