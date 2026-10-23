@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">Invoice Generator</title>
+  <g id="simbol">
+    <path fill="#171717" d="M87.2 82.8 H128 L190.4 145.2 V214.8 A21.6 21.6 0 0 1 168.8 236.4 H87.2 A21.6 21.6 0 0 1 65.6 214.8 V104.4 A21.6 21.6 0 0 1 87.2 82.8 Z"/>
+    <path fill="#E4572E" d="M128 15.6 H190.4 V78 Z"/>
+  </g>
+</svg>

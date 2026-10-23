@@ -3,8 +3,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo-mark-white.svg" />
-  <img src="docs/brand/logo-mark.svg" width="96" alt="Logo Invoice Generator: huruf i, titiknya sudut kertas yang terlipat" />
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo-symbol-reversed.svg" />
+  <img src="docs/brand/logo-symbol.svg" width="96" alt="Logo Invoice Generator: huruf i, titiknya sudut kertas yang terlipat" />
 </picture>
 
 # Invoice Generator
@@ -104,7 +104,7 @@ invoice-generate/
 ├── public/assets/         # logo, tanda tangan, dan cap supplier untuk PDF
 ├── supabase/migrations/   # perubahan skema dan policy yang sudah diterapkan
 ├── scripts/               # cek atribusi AI
-├── docs/brand/            # logo Invoice Generator
+├── docs/brand/            # logo, ikon, dan panduan pemakaiannya
 └── CLAUDE.md              # panduan arsitektur dan aturan kerja
 ```
 

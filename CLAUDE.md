@@ -68,6 +68,7 @@ Supabase tables: `profiles`, `subscriptions`, `subscription_config` (singleton r
 - 4-space indent, single quotes; semicolon usage varies, so match the file you're editing.
 - API responses: `{ success: true, data }` on success, `{ error, message? }` on failure. API routes that read auth use `export const dynamic = 'force-dynamic'`.
 - UI: shadcn/ui (`components/ui/*`), `lucide-react` icons, `sonner` toasts (`toast.success/error/warning`). Currency/date formatting goes through `lib/pdf/utils.ts` (`formatCurrency`, `formatNumber`, `formatDate`).
+- Logo masters and usage rules live in `docs/brand/` (see its README). The app icons are `app/icon.svg`, `app/favicon.ico`, and `app/apple-icon.png`.
 
 ## Git workflow
 
