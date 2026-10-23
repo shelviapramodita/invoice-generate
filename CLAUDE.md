@@ -92,4 +92,4 @@ Claude Code attribution is turned off in `.claude/settings.json`. The rule is en
 
 `npm install` turns the hooks on through the `prepare` script. Without that, run `git config core.hooksPath .githooks` once per clone. If a check fails, fix the commit (`git commit --amend`, or `git rebase -i origin/main` for older commits) instead of skipping it with `--no-verify`. CI rejects it anyway. Patterns live in `scripts/check-no-ai.sh`, and examples live in `scripts/test-check-no-ai.sh`.
 
-Commits on `main` from before 2026-10-23 still carry `Co-authored-by: Claude` trailers. GitHub does not count trailers toward Contributors, and the workflow only checks new commits.
+GitHub counts `Co-authored-by` trailers toward the Contributors list, so one AI trailer on `main` is enough to put the agent there. On 2026-10-24 the history of `main` was rewritten to remove the old trailers; file contents, authors, and dates did not change. A clone made before that date must run `git fetch origin && git reset --hard origin/main` instead of `git pull`, or the old commits come back.
