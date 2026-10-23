@@ -4,9 +4,8 @@ import { ParsedExcelData, InvoiceItemForm } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { getSupplierConfig } from '@/data/cv-reference'
-import { getParsedDataSummary } from '@/lib/excel-parser'
+import { getParsedDataSummary } from '@/lib/excel/parser'
 import { Package, CreditCard, FileText, Building2 } from 'lucide-react'
 
 interface InvoicePreviewProps {

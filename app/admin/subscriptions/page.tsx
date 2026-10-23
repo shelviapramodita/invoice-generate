@@ -121,7 +121,7 @@ export default function AdminSubscriptionsPage() {
             } else {
                 toast.error('Gagal memuat bukti pembayaran')
             }
-        } catch (error) {
+        } catch {
             toast.error('Gagal memuat bukti pembayaran')
         }
     }

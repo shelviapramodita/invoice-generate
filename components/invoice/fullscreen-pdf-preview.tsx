@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Download, X, FileArchive, FilePlus2, ChevronDown, ChevronRight, Filter } from 'lucide-react'
-import { GeneratedPDF } from '@/lib/pdf/pdf-generator'
+import type { GeneratedPDF } from '@/types'
 import type { InvoiceDocType } from '@/lib/pdf/utils'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -187,7 +187,7 @@ export function FullScreenPDFPreview({
         console.log('Downloading current PDF:', selectedPdf.supplier)
         setDownloading(true)
         try {
-            const { downloadPDF } = await import('@/lib/pdf/pdf-generator')
+            const { downloadPDF } = await import('@/lib/pdf/download')
             // Prefer the PDF's own batchName (per-day "Nama Batch" user configured)
             // over the generic prop batchName.
             const effectiveBatch = selectedPdf.batchName ?? batchName
@@ -211,7 +211,7 @@ export function FullScreenPDFPreview({
         console.log('Merging PDFs:', effectivePdfs.length, 'files for filter:', filterDate)
         setDownloading(true)
         try {
-            const { mergePDFs } = await import('@/lib/pdf/pdf-generator')
+            const { mergePDFs } = await import('@/lib/pdf/download')
 
             // Derive the merged filename from per-PDF batchNames so it follows
             // the "Nama Batch" the user configured. Three cases:

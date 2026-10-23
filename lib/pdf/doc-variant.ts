@@ -23,7 +23,7 @@ const SPECIAL_DAPUR_KEYWORDS = ['TAMBAK', 'SUMPIUH', 'BUAYAN']
 /** Mulai tanggal ini (inklusif) semua customer pakai TAGIHAN/KWITANSI. */
 const ALL_CUSTOMER_VARIANTS_FROM = '2026-10-12'
 
-export function isSpecialDapur(customerName: string | undefined): boolean {
+function isSpecialDapur(customerName: string | undefined): boolean {
     if (!customerName) return false
     const upper = customerName.toUpperCase()
     return SPECIAL_DAPUR_KEYWORDS.some(k => upper.includes(k))

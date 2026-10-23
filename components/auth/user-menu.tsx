@@ -4,11 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
 import {
-    User,
     LogOut,
-    Shield,
     LayoutDashboard,
     CreditCard,
     Users,

@@ -1,9 +1,9 @@
 import * as XLSX from 'xlsx'
 import { ExcelRow, ParsedExcelData, InvoiceItemForm, SheetEntry, WorkbookParseResult, SheetType, SheetCategory } from '@/types'
-import { excelRowSchema, normalizeSupplierName } from './validators'
+import { excelRowSchema, normalizeSupplierName } from '../validators'
 import { getSupplierConfig } from '@/data/cv-reference'
-import { normalizeItemName } from './text-normalizer'
-import { getSupplierTemplateKey } from './pdf/utils'
+import { normalizeItemName } from './normalizer'
+import { getSupplierTemplateKey } from '../pdf/utils'
 
 interface ParseResult {
     success: boolean
@@ -47,7 +47,7 @@ function isPlausibleYear(y: number): boolean {
  *   "7 SEPTEMBER TAHAP 2"    → single-day, label "7 Sep 2026 (Tahap 2)"
  *   "2026"                   → unparseable
  */
-export function parseSheetName(name: string, fallbackYear?: number): {
+function parseSheetName(name: string, fallbackYear?: number): {
     type: SheetType
     detectedDate?: Date
     dateRangeStart?: Date
@@ -148,9 +148,6 @@ export function parseSheetName(name: string, fallbackYear?: number): {
 
     return { type: 'unparseable', label: name.trim() || '(no name)', category, tahap }
 }
-
-// Required columns for invoice data
-const REQUIRED_COLUMNS = ['URAIAN', 'QTY', 'HARGA', 'SATUAN', 'TOTAL', 'SUPPLIER']
 
 // Patterns to detect non-data rows (categories, totals, notes)
 const SKIP_PATTERNS = [
@@ -723,25 +720,6 @@ function parseWorksheetRows(rawRows: unknown[][]): ParseResult {
 }
 
 /**
- * Parse Excel file (first sheet only). Backward-compat wrapper.
- */
-export async function parseExcelFile(file: File): Promise<ParseResult> {
-    try {
-        const arrayBuffer = await file.arrayBuffer()
-        const workbook = XLSX.read(arrayBuffer, { type: 'array', raw: true })
-        const firstSheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[firstSheetName]
-        const rawRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: undefined })
-        return parseWorksheetRows(rawRows)
-    } catch (error: any) {
-        return {
-            success: false,
-            error: error.message || 'Gagal mem-parse file Excel',
-        }
-    }
-}
-
-/**
  * Parse the entire workbook: every sheet is attempted, with metadata about
  * detected date(s) from the sheet name. Sheets that fail to parse are still
  * returned with an `error` field so the UI can show why.
@@ -840,7 +818,7 @@ export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResul
 /**
  * Calculate total per supplier
  */
-export function calculateSupplierTotal(items: InvoiceItemForm[]): number {
+function calculateSupplierTotal(items: InvoiceItemForm[]): number {
     return items.reduce((sum, item) => sum + item.total, 0)
 }
 

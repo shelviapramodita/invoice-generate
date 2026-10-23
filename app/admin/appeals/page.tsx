@@ -46,7 +46,6 @@ export default function AdminAppealsPage() {
     const [selectedAppeal, setSelectedAppeal] = useState<Appeal | null>(null)
     const [responseText, setResponseText] = useState('')
     const [submitting, setSubmitting] = useState(false)
-    const [actionType, setActionType] = useState<'approved' | 'rejected' | null>(null)
 
     const fetchAppeals = async () => {
         try {
@@ -83,7 +82,6 @@ export default function AdminAppealsPage() {
             toast.success(status === 'approved' ? 'Banding disetujui, akun di-recover' : 'Banding ditolak')
             setSelectedAppeal(null)
             setResponseText('')
-            setActionType(null)
             await fetchAppeals()
         } catch (error: any) {
             toast.error(error.message)
@@ -186,7 +184,7 @@ export default function AdminAppealsPage() {
             </Card>
 
             {/* Appeal Detail Modal */}
-            <Dialog open={!!selectedAppeal} onOpenChange={(open) => { if (!open) { setSelectedAppeal(null); setActionType(null) } }}>
+            <Dialog open={!!selectedAppeal} onOpenChange={(open) => { if (!open) setSelectedAppeal(null) }}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -245,7 +243,7 @@ export default function AdminAppealsPage() {
                         <DialogFooter>
                             <Button
                                 variant="outline"
-                                onClick={() => { setSelectedAppeal(null); setActionType(null) }}
+                                onClick={() => setSelectedAppeal(null)}
                                 disabled={submitting}
                             >
                                 Batal

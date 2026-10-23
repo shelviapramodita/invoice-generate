@@ -14,10 +14,9 @@ import { SheetPicker } from '@/components/excel/sheet-picker'
 import { InvoicePreview } from '@/components/invoice/invoice-preview'
 import { FullScreenPDFPreview } from '@/components/invoice/fullscreen-pdf-preview'
 import { CustomerNameInput } from '@/components/invoice/customer-name-input'
-import { SheetEntry, SheetCategory } from '@/types'
-import { extractSppgNameFromFilename } from '@/lib/text-normalizer'
+import type { SheetEntry, SheetCategory, GeneratedPDF } from '@/types'
+import { extractSppgNameFromFilename } from '@/lib/excel/normalizer'
 import { usesLegacyFaktur, type InvoiceDocType } from '@/lib/pdf/doc-variant'
-import type { GeneratedPDF } from '@/lib/pdf/pdf-generator'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
@@ -195,7 +194,6 @@ export default function UploadPage() {
             return updated
         })
     // configs intentionally excluded to avoid loop on its own writes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sppgName, sheets])
 
     // Auto-recompute kwitansi numbers across selected sheets in chronological order.
@@ -230,7 +228,6 @@ export default function UploadPage() {
         })
     // sheets is included so re-parse triggers recompute, but configs is omitted
     // to prevent the effect from looping on its own state writes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedSheetNames, startingNumber, sheets])
 
     const handleParsed = (parsedSheets: SheetEntry[], fileName: string) => {
@@ -465,7 +462,7 @@ export default function UploadPage() {
      */
     const handleDownloadPDFs = async (filteredPdfs: GeneratedPDF[]) => {
         if (!filteredPdfs || filteredPdfs.length === 0) return
-        const { downloadAllPDFs } = await import('@/lib/pdf/pdf-generator')
+        const { downloadAllPDFs } = await import('@/lib/pdf/download')
 
         // Derive the date range from the actual PDFs being downloaded.
         // groupLabel is "DD-MM-YYYY"; sort lex after reversing to YYYY-MM-DD.

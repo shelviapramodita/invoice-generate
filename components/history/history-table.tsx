@@ -18,7 +18,6 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { InvoiceDetailView } from './invoice-detail-view'
 import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-dialog'
-import { exportHistoryToExcel } from '@/lib/excel/excel-export'
 
 interface InvoiceHistory {
     id: string

@@ -118,7 +118,7 @@ export function getSupplierConfig(supplierName: string): SupplierConfig | null {
         // silently drops when a "0330250705"-style account is stored as a
         // raw number ("330250705") still matches correctly.
         const accountNumeric = accountNumber.replace(/^0+/, '') || '0'
-        for (const [key, config] of Object.entries(supplierMapping)) {
+        for (const config of Object.values(supplierMapping)) {
             const candidates = [config.bankAccount, ...(config.legacyBankAccounts || [])]
             if (candidates.some(acc => acc.replace(/^0+/, '') === accountNumeric)) {
                 return config

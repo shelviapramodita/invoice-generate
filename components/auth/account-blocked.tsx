@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { Ban, PauseCircle, LogOut, MessageSquare, Clock, CheckCircle, XCircle } from 'lucide-react'
+import { Ban, PauseCircle, LogOut, MessageSquare, Clock } from 'lucide-react'
 
 interface AccountBlockedProps {
     profile: {

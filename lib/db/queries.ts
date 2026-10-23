@@ -83,19 +83,6 @@ export async function createInvoiceItems(
     return result.data
 }
 
-export async function getInvoiceHistory(limit = 50) {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('invoice_history')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit)
-
-    if (error) throw new Error(`Failed to fetch invoice history: ${error.message}`)
-    return data
-}
-
 export async function getInvoiceById(id: string) {
     const supabase = await createClient()
 
@@ -116,26 +103,6 @@ export async function getInvoiceById(id: string) {
     if (itemsError) throw new Error(`Failed to fetch invoice items: ${itemsError.message}`)
 
     return { ...invoice, items }
-}
-
-export async function updateInvoiceHistory(
-    id: string,
-    updates: Partial<{
-        batch_name: string
-        status: 'generated' | 'completed'
-    }>
-) {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('invoice_history')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-
-    if (error) throw new Error(`Failed to update invoice history: ${error.message}`)
-    return data
 }
 
 export async function deleteInvoiceHistory(id: string) {

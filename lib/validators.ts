@@ -98,36 +98,6 @@ export const excelRowSchema = z.object({
 })
 
 /**
- * Schema untuk validasi batch parsed data
- */
-export const parsedDataSchema = z.object({
-    items: z.array(excelRowSchema),
-    totalItems: z.number(),
-    suppliers: z.array(z.string()),
-})
-
-/**
- * Schema untuk form upload
- */
-export const uploadFormSchema = z.object({
-    file: z.instanceof(File, { message: 'File harus berupa File object' }),
-    invoiceDate: z.date({ error: 'Tanggal invoice wajib diisi' }),
-    batchName: z.string().optional(),
-})
-
-/**
- * Validate supplier name apakah valid
- */
-export function isValidSupplier(supplierName: string): boolean {
-    const validSuppliers = ['PT JAYAMEN GROUP MANDIRI', 'UMKM UNDI YUWONO', 'NUSANTARA FOOD', 'SUSILO WIDYONO', 'SRI KARYA MUKTI', 'UD HIDAYAT']
-    const normalized = supplierName.trim().toUpperCase()
-
-    return validSuppliers.some(valid =>
-        normalized.includes(valid) || valid.includes(normalized)
-    )
-}
-
-/**
  * Sheets sometimes have doubled-letter typos in a supplier name (e.g. "UD
  * HIIDAYAT" instead of "UD HIDAYAT"), which breaks a plain .includes()
  * keyword check since the doubled letter isn't part of the real keyword.

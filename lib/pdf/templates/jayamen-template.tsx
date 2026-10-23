@@ -6,11 +6,10 @@ import {
     View,
     StyleSheet,
     Image,
-    Font,
 } from '@react-pdf/renderer'
 import { InvoiceItemForm } from '@/types'
 import {
-    formatCurrency, formatDate, formatNumber, getAssetPath,
+    formatDate, formatNumber, getAssetPath,
     getInvoiceTitle, getInvoiceNumberLabel, shouldHideSignature, shouldShowStamp, getCustomerLabelPrefix,
     resolveDocType, InvoiceDocType,
 } from '../utils'

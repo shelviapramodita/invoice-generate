@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
-import { Trash2, Eye, X, Edit, Save, CheckCircle, Plus, CalendarIcon, Download, FileDown, FileArchive, Files } from 'lucide-react'
+import { Trash2, Eye, X, Edit, Save, CheckCircle, Plus, CalendarIcon, Download, FileArchive, Files } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Dialog,
@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { downloadFile } from '@/lib/storage/file-upload'
+import { downloadFile } from '@/lib/storage/files'
 
 interface InvoiceItem {
     id: string
@@ -146,31 +146,6 @@ export function InvoiceDetailView({
             setDeletedItemIds([])
         }
     }, [open])
-
-    const handleDownloadPDF = async (supplier: string, pdfPath: string) => {
-        if (!pdfPath) {
-            toast.error('File PDF tidak ditemukan')
-            return
-        }
-
-        try {
-            document.body.style.cursor = 'wait'
-            const blob = await downloadFile('generated-pdfs', pdfPath)
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = `Invoice-${supplier}-${new Date().getTime()}.pdf`
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            URL.revokeObjectURL(url)
-        } catch (error) {
-            console.error('Error downloading PDF:', error)
-            toast.error('Gagal mendownload PDF. Pastikan file ada di storage.')
-        } finally {
-            document.body.style.cursor = 'default'
-        }
-    }
 
     const handleDelete = () => {
         setShowDeleteConfirm(true)
@@ -462,7 +437,7 @@ export function InvoiceDetailView({
         setShowDownloadOptions(false)
         try {
             const { pdfs, batchName } = await fetchGeneratedPDFs()
-            const { downloadPDF } = await import('@/lib/pdf/pdf-generator')
+            const { downloadPDF } = await import('@/lib/pdf/download')
             const safeBatch = batchName?.replace(/[\/\\:*?"<>|]/g, '-')?.trim()
 
             for (const p of pdfs) {
@@ -485,7 +460,7 @@ export function InvoiceDetailView({
         setShowDownloadOptions(false)
         try {
             const { pdfs, batchName } = await fetchGeneratedPDFs()
-            const { mergePDFs } = await import('@/lib/pdf/pdf-generator')
+            const { mergePDFs } = await import('@/lib/pdf/download')
             const safeBatch = batchName?.replace(/[\/\\:*?"<>|]/g, '-')?.trim()
             const filename = safeBatch
                 ? `${safeBatch}-Merged.pdf`
@@ -505,7 +480,7 @@ export function InvoiceDetailView({
         setShowDownloadOptions(false)
         try {
             const { pdfs, batchName } = await fetchGeneratedPDFs()
-            const { downloadAsZip } = await import('@/lib/pdf/pdf-generator')
+            const { downloadAsZip } = await import('@/lib/pdf/download')
             const safeBatch = batchName?.replace(/[\/\\:*?"<>|]/g, '-')?.trim()
             const filename = safeBatch
                 ? `Invoices-${safeBatch}.zip`
@@ -616,7 +591,7 @@ export function InvoiceDetailView({
                 return
             }
 
-            const { downloadAllPDFs } = await import('@/lib/pdf/pdf-generator')
+            const { downloadAllPDFs } = await import('@/lib/pdf/download')
             await downloadAllPDFs(pdfs, invoice?.batch_name || undefined)
         } catch (error) {
             console.error('Error downloading all PDFs:', error)
