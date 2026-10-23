@@ -60,7 +60,7 @@ Some suppliers share a template (Nusantara Food and Susilo Widyono both use `sek
 - `invoice_items.pdf_file_path` sentinels: `'client-side-download'` (storage upload failed) and `'pending-regeneration'` (new item before regen). Skip storage deletes for these.
 
 ### Data
-Supabase tables: `profiles`, `subscriptions`, `subscription_config` (singleton row), `invoice_history`, `invoice_items`, `login_history`, `appeals`. Storage buckets: `excel-files`, `generated-pdfs`, `payment-proofs`. Most of the schema lives in Supabase, not in the repo; `supabase/migrations/` only holds incremental changes. Shared types are in `types/index.ts`, and DB helpers in `lib/db/queries.ts`.
+Supabase tables: `profiles`, `subscriptions`, `subscription_config` (singleton row), `invoice_history`, `invoice_items`, `login_history`, `appeals`. Storage buckets: `excel-files` (unused), `generated-pdfs`, `payment-proofs`. All three are private, and storage RLS allows authenticated users only (see `supabase/migrations/20261023_lock_down_storage_policies.sql`). Never re-add anon or public policies, because the anon key ships to every browser. Most of the schema lives in Supabase, not in the repo; `supabase/migrations/` only holds incremental changes. Shared types are in `types/index.ts`, and DB helpers in `lib/db/queries.ts`.
 
 ## Conventions
 - 4-space indent, single quotes; semicolon usage varies, so match the file you're editing.
