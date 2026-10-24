@@ -1,3 +1,5 @@
+import type { InvoiceDocType } from '@/lib/pdf/doc-variant'
+
 // Database Types
 export interface InvoiceHistory {
     id: string
@@ -24,15 +26,6 @@ export interface InvoiceItem {
     created_at: string
 }
 
-export interface RevisionLog {
-    id: string
-    history_id: string
-    revised_at: string
-    revised_by: string | null
-    changes: any
-    reason: string | null
-}
-
 // Excel Row Type (sesuai struktur Excel yang diberikan)
 export interface ExcelRow {
     URAIAN: string
@@ -41,13 +34,6 @@ export interface ExcelRow {
     SATUAN: string
     TOTAL: number
     SUPPLIER: string
-}
-
-// Form Types
-export interface ExcelUploadForm {
-    file: File
-    invoiceDate: Date
-    batchName?: string
 }
 
 export interface InvoiceItemForm {
@@ -68,14 +54,6 @@ export interface ParsedExcelData {
     'SRI KARYA MUKTI'?: InvoiceItemForm[]
     'UD HIDAYAT'?: InvoiceItemForm[]
     [key: string]: InvoiceItemForm[] | undefined
-}
-
-// Invoice Summary per Supplier
-export interface InvoiceSummary {
-    supplier: string
-    items: InvoiceItemForm[]
-    subtotal: number
-    itemCount: number
 }
 
 // Sheet metadata after parsing a workbook with multiple sheets
@@ -104,4 +82,21 @@ export interface WorkbookParseResult {
     success: boolean
     sheets: SheetEntry[]
     error?: string
+}
+
+// PDF hasil render server (POST /api/generate-pdf), dipakai preview & download di browser
+export interface GeneratedPDF {
+    supplier: string
+    blob: Blob
+    invoiceNumber: string
+    // Optional label identifying which day/batch this PDF belongs to (e.g. "21-01-2026").
+    // Used by preview sidebar and ZIP folder grouping when generating across multiple days.
+    groupLabel?: string
+    // The Nama Batch the user configured for this PDF's day (e.g.
+    // "Kwitansi SPPG Tambak - 28/04/2026"). Used as folder name in ZIPs and
+    // filename prefix for single-PDF downloads so the user gets neat,
+    // consistent file naming that matches what they typed in the UI.
+    batchName?: string
+    // Which variant this PDF is (TAGIHAN/KWITANSI).
+    documentType?: InvoiceDocType
 }

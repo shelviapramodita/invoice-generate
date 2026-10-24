@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateInvoicePDFsWithNumbers, GeneratedPDF } from '@/lib/pdf/pdf-generator'
+import { generateInvoicePDFsWithNumbers } from '@/lib/pdf/pdf-generator'
 import { ParsedExcelData, InvoiceItemForm } from '@/types'
 
 function isSupabaseConfigured(): boolean {

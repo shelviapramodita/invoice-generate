@@ -211,11 +211,7 @@ export async function PATCH(
             })
 
             const { pdf } = await import('@react-pdf/renderer')
-            const { JayamenTemplate } = await import('@/lib/pdf/templates/jayamen-template')
-            const { UndiYuwonoTemplate } = await import('@/lib/pdf/templates/undi-yuwono-template')
-            const { SekarWijayakusumaTemplate } = await import('@/lib/pdf/templates/sekar-wijayakusuma-template')
-            const { SriKaryaMuktiTemplate } = await import('@/lib/pdf/templates/sri-karya-mukti-template')
-            const { UdHidayatTemplate } = await import('@/lib/pdf/templates/ud-hidayat-template')
+            const { renderSupplierTemplate } = await import('@/lib/pdf/templates')
 
             const invoiceDateParsed = new Date(invoiceHistory.invoice_date)
 
@@ -247,27 +243,12 @@ export async function PATCH(
                 // 'tagihan' (ttd tetap ada, tanpa cap LUNAS). Invoice lama
                 // customer biasa (≤ 11 Okt 2026) otomatis tetap FAKTUR
                 // (ttd + cap LUNAS) — template yang menentukan dari tanggal.
-                let template
-                switch (templateKey) {
-                    case 'jayamen':
-                        template = JayamenTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
-                        break
-                    case 'undi-yuwono':
-                        template = UndiYuwonoTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
-                        break
-                    case 'nusantara-food':
-                        template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
-                        break
-                    case 'susilo-widyono':
-                        template = SekarWijayakusumaTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName, signatureName: 'SUSILO WIDYONO' })
-                        break
-                    case 'sri-karya-mukti':
-                        template = SriKaryaMuktiTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
-                        break
-                    case 'ud-hidayat':
-                        template = UdHidayatTemplate({ invoiceNumber, invoiceDate: invoiceDateParsed, items: pdfItems, customerName })
-                        break
-                }
+                const template = renderSupplierTemplate(templateKey, {
+                    invoiceNumber,
+                    invoiceDate: invoiceDateParsed,
+                    items: pdfItems,
+                    customerName,
+                })
 
                 const pdfBlob = await pdf(template).toBlob()
                 const arrayBuffer = await pdfBlob.arrayBuffer()

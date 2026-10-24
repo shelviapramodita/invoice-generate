@@ -5,7 +5,7 @@ import { useDropzone } from 'react-dropzone'
 import { Upload, FileSpreadsheet, AlertCircle, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { parseExcelWorkbook } from '@/lib/excel-parser'
+import { parseExcelWorkbook } from '@/lib/excel/parser'
 import { SheetEntry } from '@/types'
 
 interface ExcelUploaderProps {

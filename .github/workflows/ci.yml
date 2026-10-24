@@ -1,0 +1,33 @@
+name: CI
+
+# Typecheck dan build production di setiap PR dan push ke main.
+# Lint belum masuk gerbang karena masih ada error no-explicit-any lama.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: typecheck-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Build tidak memanggil Supabase; nilai asli cuma dibutuhkan saat runtime di Vercel.
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build

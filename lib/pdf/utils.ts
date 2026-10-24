@@ -1,5 +1,4 @@
 import { format } from 'date-fns'
-import { id } from 'date-fns/locale'
 import path from 'path'
 import type { RenderedDocType } from './doc-variant'
 
@@ -54,15 +53,6 @@ export function formatDate(date: Date): string {
 }
 
 /**
- * Format date to full Indonesian format
- * @param date - Date to format
- * @returns Formatted date string (e.g., "20 Januari 2026")
- */
-export function formatDateLong(date: Date): string {
-    return format(date, 'dd MMMM yyyy', { locale: id })
-}
-
-/**
  * Generate invoice number with auto-increment
  * Format: #{XXXX} — general, tanpa prefix "KWITANSI" (dipakai juga untuk
  * varian TAGIHAN/KWITANSI).
@@ -84,13 +74,6 @@ export function getNextInvoiceNumber(): string {
     const invoiceNumber = generateInvoiceNumber(currentSequence)
     currentSequence++
     return invoiceNumber
-}
-
-/**
- * Reset sequence (for testing)
- */
-export function resetSequence(start: number = 1) {
-    currentSequence = start
 }
 
 // Aturan varian (TAGIHAN/KWITANSI vs FAKTUR lama, cutoff tanggal) ada di
