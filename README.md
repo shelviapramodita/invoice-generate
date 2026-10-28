@@ -19,14 +19,14 @@ dan membuat tagihan PDF resmi lengkap dengan rekening, tanda tangan, dan nomor u
 [![CI](https://img.shields.io/github/actions/workflow/status/shelviapramodita/invoice-generate/ci.yml?branch=main&style=flat-square&label=CI&labelColor=1B1F24)](https://github.com/shelviapramodita/invoice-generate/actions/workflows/ci.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-white?style=flat-square&logo=nextdotjs&logoColor=white&labelColor=1B1F24)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=61DAFB&labelColor=1B1F24)](https://react.dev)
-[![Supabase](https://img.shields.io/badge/Supabase-Auth_·_Postgres_·_Storage-3ECF8E?style=flat-square&logo=supabase&logoColor=3ECF8E&labelColor=1B1F24)](https://supabase.com)
+[![Convex](https://img.shields.io/badge/Convex-Auth_·_Database_·_Storage-EE342F?style=flat-square&labelColor=1B1F24)](https://convex.dev)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38bdf8?style=flat-square&logo=tailwindcss&logoColor=38bdf8&labelColor=1B1F24)](https://tailwindcss.com)
 
 </div>
 
 > [!NOTE]
 > Aplikasi internal untuk operator dapur SPPG. Pengguna perlu akun dengan langganan aktif yang disetujui admin.
-> Vercel men-deploy `main` ke produksi. Data, akun, dan PDF disimpan di Supabase.
+> Vercel men-deploy `main` ke produksi. Data dan akun disimpan di Convex (pindah dari Supabase pada Oktober 2026, lihat [`docs/migrasi-convex.md`](docs/migrasi-convex.md)).
 
 ## Kenapa Invoice Generator
 
@@ -57,7 +57,7 @@ flowchart LR
     xlsx[/"Excel RAB"/] --> parse["Browser<br/>parse sheet dan item<br/>(lib/excel)"]
     parse -->|"item per supplier (JSON)"| api["POST /api/generate-pdf<br/>(server Next.js)"]
     api --> render["@react-pdf/renderer<br/>template per supplier<br/>(lib/pdf)"]
-    api -->|"invoice_history<br/>invoice_items"| db[("Supabase Postgres")]
+    api -->|"invoice_history<br/>invoice_items"| db[("Convex")]
     render -->|"PDF base64"| preview["Browser<br/>preview, unduh, ZIP, gabung"]
     db -->|"dibuka dari History"| render
 ```
@@ -65,24 +65,25 @@ flowchart LR
 - **Excel dibaca di browser.** File RAB tidak pernah diunggah. Server hanya menerima item yang sudah dikelompokkan per supplier.
 - **PDF dibuat di server.** `@react-pdf/renderer` dan semua template hanya jalan di server. Browser cuma memuat helper unduh yang ringan.
 - **Satu peta supplier ke template.** `renderSupplierTemplate` dipakai saat generate pertama dan saat PDF dibuat ulang dari riwayat, jadi hasil keduanya selalu sama.
-- **PDF tidak disimpan di storage.** Yang disimpan cuma data invoice di database. Saat invoice dibuka dari History, PDF-nya dibuat ulang dari data itu, jadi kuota Storage Supabase tidak ikut membengkak.
+- **PDF tidak disimpan di storage.** Yang disimpan cuma data invoice di database. Saat invoice dibuka dari History, PDF-nya dibuat ulang dari data itu, jadi kuota storage tidak ikut membengkak.
 - **PDF tetap ringan.** Logo, tanda tangan, dan cap disimpan di 300 dpi dari ukuran tampilnya, jadi satu PDF rata-rata sekitar 100 KB.
 
 ## Mulai lokal
 
-Butuh Node.js 20.9 atau lebih baru dan project Supabase.
+Butuh Node.js 20.9 atau lebih baru dan akun [Convex](https://convex.dev).
 
 ```sh
 git clone https://github.com/shelviapramodita/invoice-generate.git
 cd invoice-generate
 npm install                  # sekalian mengaktifkan hook git
-cp .env.example .env.local   # isi URL dan key Supabase
-npm run dev                  # http://localhost:3000
+npx convex dev               # login Convex, buat/pilih project, isi .env.local
+npm run dev                  # http://localhost:3000 (terminal kedua)
 ```
 
 | Perintah | Fungsi |
 | --- | --- |
 | `npm run dev` | Server development (Turbopack) |
+| `npx convex dev` | Kirim `convex/` ke deployment dev dan perbarui `convex/_generated` |
 | `npm run build` | Build production |
 | `npm run typecheck` | Cek tipe TypeScript |
 | `npm run lint` | ESLint |
@@ -93,19 +94,18 @@ npm run dev                  # http://localhost:3000
 ```text
 invoice-generate/
 ├── app/                   # halaman (upload, history, admin, auth) dan route API
+├── convex/                # backend: skema, fungsi per area, Convex Auth, impor data lama
 ├── components/            # komponen UI: excel, invoice, history, auth, ui (shadcn)
 ├── lib/
 │   ├── excel/             # parser workbook dan normalisasi nama item
 │   ├── pdf/               # generator, template per supplier, varian dokumen, helper unduh
-│   ├── db/                # query Supabase untuk riwayat invoice
-│   ├── storage/           # unduh PDF dari Storage
-│   └── supabase/          # client browser, server, dan middleware
+│   └── convex/            # pemanggil fungsi Convex dari route API
 ├── data/                  # data resmi supplier: rekening, alamat, warna
 ├── types/                 # tipe bersama
 ├── public/assets/         # logo, tanda tangan, dan cap supplier untuk PDF
-├── supabase/migrations/   # perubahan skema dan policy yang sudah diterapkan
-├── scripts/               # cek atribusi AI
+├── scripts/               # cek atribusi AI, kunci Convex Auth, ekspor/impor data Supabase
 ├── docs/brand/            # logo, ikon, dan panduan pemakaiannya
+├── docs/migrasi-convex.md # panduan migrasi Supabase → Convex
 └── CLAUDE.md              # panduan arsitektur dan aturan kerja
 ```
 
@@ -122,18 +122,18 @@ ESLint belum masuk gerbang karena masih ada error `no-explicit-any` lama. Peruba
 
 ## Keamanan dan privasi
 
-- **Akses halaman di satu tempat.** `middleware.ts` mengarahkan pengguna yang belum masuk, yang diblokir, dan yang belum berlangganan. Halaman `/admin` hanya untuk role admin dari tabel `profiles`.
-- **Setiap route API memeriksa sendiri.** Middleware tidak menyentuh `/api/*`, jadi setiap route memanggil `supabase.auth.getUser()` dan mengecek role bila perlu.
-- **Storage tertutup.** Semua bucket private dan hanya bisa diakses pengguna yang masuk. Bukti transfer hanya bisa dibaca pemiliknya dan admin. Policy-nya tercatat di [`supabase/migrations/`](supabase/migrations).
-- **Service role hanya di server.** Key ini hanya dipakai route admin untuk reset password dan tidak pernah dikirim ke browser.
+- **Akses halaman di satu tempat.** `middleware.ts` mengarahkan pengguna yang belum masuk, yang diblokir, dan yang belum berlangganan. Halaman `/admin` hanya untuk role admin dari tabel `users`.
+- **Setiap fungsi Convex memeriksa sendiri.** Fungsi Convex bisa dipanggil langsung dari internet, jadi semuanya lewat `requireUser` / `requireAdmin` di `convex/lib/auth.ts`, termasuk cek kepemilikan invoice.
+- **Bukti transfer hanya untuk admin.** File disimpan di storage Convex, dan URL-nya hanya diberikan ke admin.
+- **Password tetap bcrypt.** Hash dari Supabase ikut dipindah, jadi user lama login dengan password lamanya.
 - **Satu sesi aktif.** Login di perangkat lain menutup sesi lama, dan sesi yang lama diam otomatis keluar.
 
 ## Deploy
 
 | Bagian | Di mana | Catatan |
 | --- | --- | --- |
-| Aplikasi | Vercel | `main` otomatis ke produksi. Env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
-| Database, Auth, Storage | Supabase (Free) | Kuota storage 1 GB, dan setiap PDF yang dibuat ikut tersimpan. Migrasi dijalankan lewat SQL Editor, lalu dicatat di `supabase/migrations/` |
+| Aplikasi | Vercel | `main` otomatis ke produksi. Build Command menjalankan `npx convex deploy`, env: `CONVEX_DEPLOY_KEY` |
+| Database, Auth, Storage | Convex (Free) | Database 0,5 GB, file 1 GB. PDF tidak disimpan, cuma data invoice |
 
 ## Berkontribusi
 
