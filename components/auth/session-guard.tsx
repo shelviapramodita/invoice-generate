@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useAuthActions } from '@convex-dev/auth/react'
+import { SESSION_KEY } from '@/components/auth/auth-client'
 import { toast } from 'sonner'
 
-const SESSION_KEY = 'invoice_session_id'
 const POLL_INTERVAL = 30_000
 const IDLE_TIMEOUT = 15 * 60 * 1000
 const IDLE_WARNING = 13 * 60 * 1000
@@ -13,6 +13,7 @@ const IDLE_WARNING = 13 * 60 * 1000
 export function SessionGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter()
     const pathname = usePathname()
+    const { signOut } = useAuthActions()
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -26,12 +27,11 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
         localStorage.removeItem(SESSION_KEY)
         toast.error(message, { duration: 5000 })
         setTimeout(async () => {
-            const supabase = createClient()
-            await supabase.auth.signOut()
+            await signOut()
             router.push('/login')
             router.refresh()
         }, delay)
-    }, [router])
+    }, [router, signOut])
 
     useEffect(() => {
         if (isPublicRoute || kicked) return

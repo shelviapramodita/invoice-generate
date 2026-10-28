@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import { useLogout } from '@/components/auth/auth-client'
 import {
     LogOut,
     LayoutDashboard,
@@ -28,15 +29,10 @@ interface UserProfile {
 }
 
 export function UserMenu() {
-    const router = useRouter()
-    const [profile, setProfile] = useState<UserProfile | null>(null)
-    const [loading, setLoading] = useState(true)
+    // Reaktif: ikut berubah kalau status langganan berubah
+    const profile: UserProfile | null | undefined = useQuery(api.users.menuProfile)
     const [open, setOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
-
-    useEffect(() => {
-        fetchProfile()
-    }, [])
 
     // Close menu on outside click
     useEffect(() => {
@@ -49,52 +45,9 @@ export function UserMenu() {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
-    const fetchProfile = async () => {
-        try {
-            const supabase = createClient()
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
+    const handleLogout = useLogout()
 
-            const { data: prof } = await supabase
-                .from('profiles')
-                .select('name, email, role, last_login_at, last_login_device')
-                .eq('id', user.id)
-                .single()
-
-            if (!prof) return
-
-            // Get subscription status
-            const { data: sub } = await supabase
-                .from('subscriptions')
-                .select('status, expires_at')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single()
-
-            setProfile({
-                ...prof,
-                subscription_status: sub?.status,
-                expires_at: sub?.expires_at,
-                last_login_at: prof.last_login_at,
-                last_login_device: prof.last_login_device,
-            })
-        } catch (error) {
-            console.error('Error fetching profile:', error)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const handleLogout = async () => {
-        localStorage.removeItem('invoice_session_id')
-        const supabase = createClient()
-        await supabase.auth.signOut()
-        router.push('/login')
-        router.refresh()
-    }
-
-    if (loading || !profile) {
+    if (!profile) {
         return (
             <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
         )

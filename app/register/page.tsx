@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import { useAuthActions } from '@convex-dev/auth/react'
+import { registerSession } from '@/components/auth/auth-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,6 +13,7 @@ import { UserPlus, Eye, EyeOff } from 'lucide-react'
 
 export default function RegisterPage() {
     const router = useRouter()
+    const { signIn } = useAuthActions()
 
     const [name, setName] = useState('')
     const [email, setEmail] = useState('')
@@ -36,21 +38,16 @@ export default function RegisterPage() {
         setLoading(true)
 
         try {
-            const supabase = createClient()
-            const { error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: { name },
-                },
-            })
+            // Langsung login setelah daftar; middleware mengarahkan ke /subscribe
+            await signIn('password', { email: email.trim().toLowerCase(), password, name: name.trim(), flow: 'signUp' })
+            await registerSession()
 
-            if (error) throw error
-
-            toast.success('Registrasi berhasil! Silakan login.')
-            router.push('/login')
-        } catch (error: any) {
-            toast.error(error.message || 'Registrasi gagal')
+            toast.success('Registrasi berhasil!')
+            router.push('/')
+            router.refresh()
+        } catch (error) {
+            const message = error instanceof Error ? error.message : ''
+            toast.error(/already exists/i.test(message) ? 'Email sudah terdaftar' : 'Registrasi gagal')
         } finally {
             setLoading(false)
         }

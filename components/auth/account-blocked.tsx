@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useLogout } from '@/components/auth/auth-client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -30,7 +29,6 @@ interface AccountBlockedProps {
 }
 
 export default function AccountBlocked({ profile }: AccountBlockedProps) {
-    const router = useRouter()
     const [showAppealForm, setShowAppealForm] = useState(false)
     const [appealMessage, setAppealMessage] = useState('')
     const [submitting, setSubmitting] = useState(false)
@@ -87,13 +85,7 @@ export default function AccountBlocked({ profile }: AccountBlockedProps) {
         }
     }
 
-    const handleLogout = async () => {
-        localStorage.removeItem('invoice_session_id')
-        const supabase = createClient()
-        await supabase.auth.signOut()
-        router.push('/login')
-        router.refresh()
-    }
+    const handleLogout = useLogout()
 
     // Countdown for suspension
     const getSuspendCountdown = () => {

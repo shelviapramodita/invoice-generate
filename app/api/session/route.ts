@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { api } from '@/convex/_generated/api'
+import { convexMutation, convexQuery, errorResponse } from '@/lib/convex/server'
+
+export const dynamic = 'force-dynamic'
 
 // Parse user agent into readable device info
 function parseDevice(ua: string): string {
@@ -25,85 +28,35 @@ function parseDevice(ua: string): string {
 // POST: Register a new session (called on login)
 export async function POST(request: NextRequest) {
     try {
-        const supabase = await createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
         const { session_id, device_info } = await request.json()
 
         if (!session_id) {
             return NextResponse.json({ error: 'session_id required' }, { status: 400 })
         }
 
-        const deviceParsed = device_info ? parseDevice(device_info) : 'Unknown'
-        const now = new Date().toISOString()
-
         // Get IP from headers
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
             || request.headers.get('x-real-ip')
             || 'Unknown'
 
-        // Update profile: active session + last login info
-        const { error: profileError } = await supabase
-            .from('profiles')
-            .update({
-                active_session_id: session_id,
-                last_login_at: now,
-                last_login_device: deviceParsed,
-            })
-            .eq('id', user.id)
-
-        if (profileError) {
-            console.error('Error updating session:', profileError)
-            return NextResponse.json({ error: 'Failed to update session' }, { status: 500 })
-        }
-
-        // Insert login history
-        const { error: historyError } = await supabase
-            .from('login_history')
-            .insert({
-                user_id: user.id,
-                device_info: deviceParsed,
-                ip_address: ip,
-            })
-
-        if (historyError) {
-            console.error('Error inserting login history:', historyError)
-            // Non-critical, don't fail the request
-        }
+        await convexMutation(api.users.registerSession, {
+            session_id,
+            device_info: device_info ? parseDevice(device_info) : 'Unknown',
+            ip_address: ip,
+        })
 
         return NextResponse.json({ success: true })
     } catch (error) {
-        console.error('Session POST error:', error)
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+        return errorResponse(error, 'Failed to update session')
     }
 }
 
 // GET: Check if current session is still valid
 export async function GET() {
     try {
-        const supabase = await createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('active_session_id')
-            .eq('id', user.id)
-            .single()
-
-        return NextResponse.json({
-            success: true,
-            active_session_id: profile?.active_session_id || null,
-        })
+        const activeSessionId = await convexQuery(api.users.activeSession, {})
+        return NextResponse.json({ success: true, active_session_id: activeSessionId })
     } catch (error) {
-        console.error('Session GET error:', error)
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+        return errorResponse(error)
     }
 }

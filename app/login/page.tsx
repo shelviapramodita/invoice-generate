@@ -3,7 +3,8 @@
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import { useAuthActions } from '@convex-dev/auth/react'
+import { registerSession } from '@/components/auth/auth-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,6 +23,7 @@ function LoginForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const redirect = searchParams.get('redirect') || '/'
+    const { signIn } = useAuthActions()
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -33,32 +35,15 @@ function LoginForm() {
         setLoading(true)
 
         try {
-            const supabase = createClient()
-            const { error } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            })
-
-            if (error) throw error
-
-            // Generate unique session ID and register it with device info
-            const sessionId = crypto.randomUUID()
-            localStorage.setItem('invoice_session_id', sessionId)
-
-            await fetch('/api/session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    device_info: navigator.userAgent,
-                }),
-            })
+            await signIn('password', { email: email.trim().toLowerCase(), password, flow: 'signIn' })
+            await registerSession()
 
             toast.success('Login berhasil!')
             router.push(redirect)
             router.refresh()
-        } catch (error: any) {
-            toast.error(error.message || 'Login gagal')
+        } catch {
+            // Convex Auth tidak membedakan email tak terdaftar vs password salah
+            toast.error('Email atau password salah')
         } finally {
             setLoading(false)
         }
