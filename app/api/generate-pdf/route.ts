@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateInvoicePDFsWithNumbers } from '@/lib/pdf/pdf-generator'
 import { ParsedExcelData, InvoiceItemForm } from '@/types'
+import { api } from '@/convex/_generated/api'
+import { convexMutation } from '@/lib/convex/server'
 
-function isSupabaseConfigured(): boolean {
-    return !!(
-        process.env.NEXT_PUBLIC_SUPABASE_URL &&
-        process.env.NEXT_PUBLIC_SUPABASE_URL !== 'your-project-url' &&
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== 'your-anon-key'
-    )
-}
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
     try {
@@ -45,62 +40,32 @@ export async function POST(request: NextRequest) {
 
         let historyId: string | null = null
 
-        if (saveHistory && isSupabaseConfigured()) {
+        if (saveHistory) {
             try {
-                const { createInvoiceHistory, createInvoiceItems, ON_DEMAND_PDF_PATH } = await import('@/lib/db/queries')
-                const { createClient } = await import('@/lib/supabase/server')
+                // PDF tidak disimpan — /history me-render ulang dari item ini
+                // (GET /api/invoices/[id]/pdfs). Urutan array = urutan baris Excel.
+                const items = pdfs.flatMap((pdf) =>
+                    ((parsedData as ParsedExcelData)[pdf.supplier] || []).map((item: InvoiceItemForm) => ({
+                        supplier: pdf.supplier,
+                        invoice_number: pdf.invoiceNumber,
+                        item_name: item.item_name,
+                        quantity: item.quantity,
+                        unit: item.unit,
+                        price: item.price,
+                        total: item.total,
+                        // "Tagihan Kepada" per supplier, bisa diedit di /history
+                        customer_name: customerNames?.[pdf.supplier] ?? null,
+                    }))
+                )
 
-                const supabase = await createClient()
-                const { data: { user } } = await supabase.auth.getUser()
-
-                const suppliers = Object.keys(parsedData)
-                let totalItems = 0
-                let grandTotal = 0
-                Object.values(parsedData as ParsedExcelData).forEach((items) => {
-                    if (!items) return
-                    totalItems += items.length
-                    items.forEach((item) => { grandTotal += item.total })
+                historyId = await convexMutation(api.invoices.create, {
+                    batch_name: batchName || null,
+                    invoice_date: parsedDate.toISOString(),
+                    items,
                 })
-
-                const invoiceHistory = await createInvoiceHistory({
-                    batch_name: batchName || undefined,
-                    invoice_date: parsedDate,
-                    total_suppliers: suppliers.length,
-                    total_items: totalItems,
-                    grand_total: grandTotal,
-                    status: 'generated',
-                    user_id: user?.id || '',
-                })
-                historyId = invoiceHistory.id
-
-                const allItems: Array<InvoiceItemForm & { supplier: string; invoice_number: string; pdf_file_path: string; customer_name?: string | null }> = []
-
-                // PDF tidak di-upload ke storage — /history me-render ulang dari
-                // invoice_items (GET /api/invoices/[id]/pdfs) supaya kuota hemat.
-                for (const pdf of pdfs) {
-                    const supplierItems = parsedData[pdf.supplier] || []
-                    // Persist customer_name so it survives into /history and can be edited later
-                    const customerName = customerNames?.[pdf.supplier]
-                    supplierItems.forEach((item: InvoiceItemForm) => {
-                        allItems.push({
-                            ...item,
-                            supplier: pdf.supplier,
-                            invoice_number: pdf.invoiceNumber,
-                            pdf_file_path: ON_DEMAND_PDF_PATH,
-                            customer_name: customerName,
-                        })
-                    })
-                }
-
-                await createInvoiceItems(invoiceHistory.id, allItems)
             } catch (dbError) {
-                // CRITICAL: previously this was swallowed silently, which meant a
-                // missing customer_name column produced an empty invoice_history
-                // row + zero items — visible as "0 supplier / 0 items / Rp 0"
-                // in /history. We now log loudly so the same issue is debuggable.
-                console.error('[generate-pdf] Failed to save invoice_items:', (dbError as Error).message)
-                console.error('[generate-pdf] If the error mentions customer_name, run the migration: supabase/migrations/20260511_add_customer_name_to_invoice_items.sql')
-                console.error('[generate-pdf] invoice_history row WAS created but is now orphaned (no items). Consider deleting it from /history.')
+                // PDF tetap dikembalikan ke user walau riwayat gagal disimpan
+                console.error('[generate-pdf] Failed to save invoice history:', dbError)
             }
         }
 

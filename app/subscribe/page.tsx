@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useLogout } from '@/components/auth/auth-client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { toast } from 'sonner'
@@ -142,13 +142,7 @@ export default function SubscribePage() {
         setIsDragging(false)
     }
 
-    const handleLogout = async () => {
-        localStorage.removeItem('invoice_session_id')
-        const supabase = createClient()
-        await supabase.auth.signOut()
-        router.push('/login')
-        router.refresh()
-    }
+    const handleLogout = useLogout()
 
     if (loading) {
         return (

@@ -17,9 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # Build tidak memanggil Supabase; nilai asli cuma dibutuhkan saat runtime di Vercel.
-      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+      # Build tidak memanggil Convex; URL asli cuma dibutuhkan saat runtime di Vercel.
+      NEXT_PUBLIC_CONVEX_URL: https://example.convex.cloud
     steps:
       - uses: actions/checkout@v5
 

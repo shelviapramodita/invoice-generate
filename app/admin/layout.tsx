@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { usePathname } from 'next/navigation'
+import { useLogout } from '@/components/auth/auth-client'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard, Users, CreditCard, Settings, ArrowLeft, LogOut, History, MessageSquare } from 'lucide-react'
 
@@ -17,15 +17,8 @@ const navItems = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
-    const router = useRouter()
 
-    const handleLogout = async () => {
-        localStorage.removeItem('invoice_session_id')
-        const supabase = createClient()
-        await supabase.auth.signOut()
-        router.push('/login')
-        router.refresh()
-    }
+    const handleLogout = useLogout()
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900">
