@@ -141,9 +141,19 @@ for (const item of read('invoice_items')) {
     })
 }
 
+// Riwayat lama tanpa pemilik (user_id null, dari versi awal app) diberikan ke
+// admin paling lama supaya tidak hilang; admin memang melihat semua invoice
+const users = read('users')
+const knownUserIds = new Set(users.map((u) => u.id))
+const fallbackOwner = users
+    .filter((u) => u.profile?.role === 'admin')
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))[0]?.id ?? ''
+const ownerless = read('invoice_history').filter((h) => !knownUserIds.has(h.user_id)).length
+if (ownerless > 0) console.log(`${ownerless} riwayat tanpa pemilik diberikan ke admin paling lama`)
+
 importRows('importInvoiceHistory', read('invoice_history').map((h) => ({
     legacy_id: h.id,
-    user_legacy_id: h.user_id ?? '',
+    user_legacy_id: knownUserIds.has(h.user_id) ? h.user_id : fallbackOwner,
     batch_name: text(h.batch_name),
     invoice_date: iso(h.invoice_date) ?? iso(h.created_at),
     status: oneOf(h.status, ['generated', 'completed'], 'generated'),

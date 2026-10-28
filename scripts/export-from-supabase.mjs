@@ -28,6 +28,8 @@ const queries = {
     appeals: 'select to_jsonb(t) as row from public.appeals t',
     login_history: 'select to_jsonb(t) as row from public.login_history t',
     invoice_history: 'select to_jsonb(t) as row from public.invoice_history t order by t.created_at',
+    // Tidak dipakai kode aplikasi; diekspor untuk dicek isinya saja
+    revision_log: 'select to_jsonb(t) as row from public.revision_log t',
     // ctid = urutan fisik baris, paling dekat dengan urutan baris Excel saat insert
     invoice_items: `select to_jsonb(t) - 'pdf_file_path' as row from public.invoice_items t order by t.history_id, t.ctid`,
 }
