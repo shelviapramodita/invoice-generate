@@ -14,7 +14,6 @@ import type * as auth from "../auth.js";
 import type * as http from "../http.js";
 import type * as invoices from "../invoices.js";
 import type * as lib_auth from "../lib/auth.js";
-import type * as migrate from "../migrate.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as users from "../users.js";
 
@@ -31,7 +30,6 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   invoices: typeof invoices;
   "lib/auth": typeof lib_auth;
-  migrate: typeof migrate;
   subscriptions: typeof subscriptions;
   users: typeof users;
 }>;
