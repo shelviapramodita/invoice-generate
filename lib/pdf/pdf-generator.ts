@@ -104,3 +104,43 @@ export async function generateInvoicePDFsWithNumbers(
 
     return { pdfs, unrecognizedSuppliers }
 }
+
+// Satu baris invoice_items dari DB — field yang dibutuhkan untuk render ulang.
+export interface StoredInvoiceItem extends InvoiceItemForm {
+    invoice_number: string
+    customer_name?: string | null
+}
+
+/**
+ * Render ulang PDF sebuah invoice dari baris invoice_items (dipakai /history).
+ * PDF tidak disimpan di storage: nomor, tanggal, customer, dan item semuanya
+ * ada di DB, jadi hasilnya sama dengan saat pertama di-generate (TAGIHAN, atau
+ * FAKTUR untuk invoice lama customer biasa).
+ */
+export async function generateInvoicePDFsFromItems(
+    items: StoredInvoiceItem[],
+    invoiceDate: Date
+): Promise<GenerateInvoicePDFsResult> {
+    const parsedData: ParsedExcelData = {}
+    const invoiceNumbers: Record<string, string> = {}
+    const customerNames: Record<string, string> = {}
+
+    for (const item of items) {
+        if (!parsedData[item.supplier]) {
+            parsedData[item.supplier] = []
+            // Nomor & "Tagihan Kepada" sama untuk semua item satu supplier
+            invoiceNumbers[item.supplier] = item.invoice_number || '#0001'
+            if (item.customer_name) customerNames[item.supplier] = item.customer_name
+        }
+        parsedData[item.supplier]!.push({
+            supplier: item.supplier,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit: item.unit,
+            price: item.price,
+            total: item.total,
+        })
+    }
+
+    return generateInvoicePDFsWithNumbers(parsedData, { invoiceDate, invoiceNumbers, customerNames })
+}

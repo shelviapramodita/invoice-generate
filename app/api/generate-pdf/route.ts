@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
         if (saveHistory && isSupabaseConfigured()) {
             try {
-                const { createInvoiceHistory, createInvoiceItems } = await import('@/lib/db/queries')
+                const { createInvoiceHistory, createInvoiceItems, ON_DEMAND_PDF_PATH } = await import('@/lib/db/queries')
                 const { createClient } = await import('@/lib/supabase/server')
 
                 const supabase = await createClient()
@@ -75,23 +75,9 @@ export async function POST(request: NextRequest) {
 
                 const allItems: Array<InvoiceItemForm & { supplier: string; invoice_number: string; pdf_file_path: string; customer_name?: string | null }> = []
 
+                // PDF tidak di-upload ke storage — /history me-render ulang dari
+                // invoice_items (GET /api/invoices/[id]/pdfs) supaya kuota hemat.
                 for (const pdf of pdfs) {
-                    const safeSupplier = pdf.supplier.replace(/[^a-zA-Z0-9.-]/g, '-')
-                    const safeInvoiceNumber = pdf.invoiceNumber.replace(/[^a-zA-Z0-9.-]/g, '-')
-                    const filename = `${Date.now()}-${safeSupplier}-${safeInvoiceNumber}.pdf`
-
-                    const arrayBuffer = await pdf.blob.arrayBuffer()
-                    const buffer = Buffer.from(arrayBuffer)
-
-                    const { data: uploadData, error: uploadError } = await supabase.storage
-                        .from('generated-pdfs')
-                        .upload(filename, buffer, { contentType: 'application/pdf', upsert: false })
-
-                    const pdfPath = uploadError ? 'client-side-download' : uploadData.path
-                    if (uploadError) {
-                        console.warn('Storage upload failed:', uploadError.message)
-                    }
-
                     const supplierItems = parsedData[pdf.supplier] || []
                     // Persist customer_name so it survives into /history and can be edited later
                     const customerName = customerNames?.[pdf.supplier]
@@ -100,7 +86,7 @@ export async function POST(request: NextRequest) {
                             ...item,
                             supplier: pdf.supplier,
                             invoice_number: pdf.invoiceNumber,
-                            pdf_file_path: pdfPath,
+                            pdf_file_path: ON_DEMAND_PDF_PATH,
                             customer_name: customerName,
                         })
                     })

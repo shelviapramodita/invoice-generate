@@ -1,6 +1,43 @@
 import { createClient } from '@/lib/supabase/server'
 import { InvoiceItemForm } from '@/types'
 
+// Nilai invoice_items.pdf_file_path untuk invoice yang PDF-nya tidak disimpan
+// di storage, melainkan di-render ulang dari DB saat dibuka di /history.
+export const ON_DEMAND_PDF_PATH = 'on-demand'
+
+// Sentinel lain dari versi lama: 'client-side-download' (upload gagal) dan
+// 'pending-regeneration' (item baru sebelum regenerate). Selain itu = file di
+// bucket generated-pdfs.
+export function isStoredPdfPath(path: string | null | undefined): path is string {
+    return !!path
+        && path !== ON_DEMAND_PDF_PATH
+        && path !== 'client-side-download'
+        && path !== 'pending-regeneration'
+}
+
+// Admin boleh akses semua invoice, user biasa cuma miliknya sendiri
+export async function canAccessInvoice(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    userId: string,
+    invoiceId: string
+) {
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+
+    if (profile?.role === 'admin') return true
+
+    const { data: invoice } = await supabase
+        .from('invoice_history')
+        .select('user_id')
+        .eq('id', invoiceId)
+        .single()
+
+    return invoice?.user_id === userId
+}
+
 export async function createInvoiceHistory(data: {
     batch_name?: string
     invoice_date: Date
@@ -119,7 +156,7 @@ export async function deleteInvoiceHistory(id: string) {
         new Set(
             items
                 ?.map(item => item.pdf_file_path)
-                .filter(path => path && path !== 'client-side-download')
+                .filter(isStoredPdfPath)
         ) || []
     )
 
@@ -159,7 +196,7 @@ export async function bulkDeleteInvoiceHistory(ids: string[]) {
         new Set(
             items
                 ?.map(item => item.pdf_file_path)
-                .filter(path => path && path !== 'client-side-download')
+                .filter(isStoredPdfPath)
         ) || []
     )
 

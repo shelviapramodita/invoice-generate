@@ -1,27 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getInvoiceById, deleteInvoiceHistory } from '@/lib/db/queries'
+import { getInvoiceById, deleteInvoiceHistory, canAccessInvoice, isStoredPdfPath, ON_DEMAND_PDF_PATH } from '@/lib/db/queries'
 import { createClient } from '@/lib/supabase/server'
 import { getSupplierTemplateKey } from '@/lib/pdf/utils'
 
 export const dynamic = 'force-dynamic'
-
-async function checkAccess(supabase: any, userId: string, invoiceId: string) {
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single()
-
-    if (profile?.role === 'admin') return true
-
-    const { data: invoice } = await supabase
-        .from('invoice_history')
-        .select('user_id')
-        .eq('id', invoiceId)
-        .single()
-
-    return invoice?.user_id === userId
-}
 
 export async function GET(
     request: NextRequest,
@@ -33,7 +15,7 @@ export async function GET(
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const hasAccess = await checkAccess(supabase, user.id, id)
+        const hasAccess = await canAccessInvoice(supabase, user.id, id)
         if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
         const invoice = await getInvoiceById(id)
@@ -58,7 +40,7 @@ export async function PATCH(
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const hasAccess = await checkAccess(supabase, user.id, id)
+        const hasAccess = await canAccessInvoice(supabase, user.id, id)
         if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
         if (status && !items && !new_items && !delete_item_ids && !batch_name && !invoice_date) {
@@ -149,7 +131,7 @@ export async function PATCH(
                     unit: item.unit,
                     price: parseFloat(item.price),
                     total: parseFloat(item.total),
-                    pdf_file_path: 'pending-regeneration',
+                    pdf_file_path: ON_DEMAND_PDF_PATH,
                 }
                 if (includeCustomerName) row.customer_name = item.customer_name ?? null
                 return row
@@ -190,89 +172,26 @@ export async function PATCH(
 
         const hasDataChanges = items?.length > 0 || new_items?.length > 0 || delete_item_ids?.length > 0 || invoice_date
         // Suppliers found among the edited items that don't match any of the
-        // 5 authorized CV/UMKM — their PDF is left as-is (not regenerated)
-        // rather than silently becoming a Jayamen invoice.
+        // 5 authorized CV/UMKM — no PDF is rendered for them rather than
+        // silently becoming a Jayamen invoice.
         const unrecognizedSuppliers: string[] = []
 
         if (hasDataChanges && allItems.length > 0) {
-            const { data: invoiceHistory, error: historyError } = await supabase
-                .from('invoice_history')
-                .select('invoice_date')
-                .eq('id', id)
-                .single()
-            if (historyError) throw historyError
+            for (const supplier of uniqueSuppliers) {
+                if (!getSupplierTemplateKey(supplier as string)) unrecognizedSuppliers.push(supplier as string)
+            }
 
-            const itemsBySupplier: Record<string, any[]> = {}
-            allItems.forEach((item: any) => {
-                if (!itemsBySupplier[item.supplier]) {
-                    itemsBySupplier[item.supplier] = []
-                }
-                itemsBySupplier[item.supplier].push(item)
-            })
+            // PDF di-render ulang dari DB saat dibuka (GET /api/invoices/[id]/pdfs),
+            // jadi file lama di storage sudah basi — hapus supaya kuota lega.
+            const storedItems = allItems.filter((item) => isStoredPdfPath(item.pdf_file_path))
+            if (storedItems.length > 0) {
+                const oldPaths = Array.from(new Set(storedItems.map((item) => item.pdf_file_path as string)))
+                await supabase.storage.from('generated-pdfs').remove(oldPaths)
 
-            const { pdf } = await import('@react-pdf/renderer')
-            const { renderSupplierTemplate } = await import('@/lib/pdf/templates')
-
-            const invoiceDateParsed = new Date(invoiceHistory.invoice_date)
-
-            for (const [supplier, supplierItems] of Object.entries(itemsBySupplier)) {
-                const invoiceNumber = supplierItems[0]?.invoice_number || '#0001'
-                const oldPdfPath = supplierItems[0]?.pdf_file_path
-                // customer_name = "Tagihan Kepada" — same for all items of one supplier
-                // (per the upload flow). Read from first item in the group.
-                const customerName = supplierItems[0]?.customer_name || undefined
-
-                const pdfItems = supplierItems.map((item: any) => ({
-                    supplier: item.supplier,
-                    item_name: item.item_name,
-                    quantity: item.quantity,
-                    unit: item.unit,
-                    price: item.price,
-                    total: item.total,
-                }))
-
-                const templateKey = getSupplierTemplateKey(supplier)
-                if (!templateKey) {
-                    unrecognizedSuppliers.push(supplier)
-                    continue
-                }
-
-                // Varian dokumen (TAGIHAN/KWITANSI) dipilih user di preview,
-                // bukan disimpan per-invoice — yang masuk history selalu
-                // TAGIHAN, jadi regenerate dari sini tanpa documentType =
-                // 'tagihan' (ttd tetap ada, tanpa cap LUNAS). Invoice lama
-                // customer biasa (≤ 11 Okt 2026) otomatis tetap FAKTUR
-                // (ttd + cap LUNAS) — template yang menentukan dari tanggal.
-                const template = renderSupplierTemplate(templateKey, {
-                    invoiceNumber,
-                    invoiceDate: invoiceDateParsed,
-                    items: pdfItems,
-                    customerName,
-                })
-
-                const pdfBlob = await pdf(template).toBlob()
-                const arrayBuffer = await pdfBlob.arrayBuffer()
-                const buffer = Buffer.from(arrayBuffer)
-
-                if (oldPdfPath && oldPdfPath !== 'client-side-download' && oldPdfPath !== 'pending-regeneration') {
-                    await supabase.storage.from('generated-pdfs').remove([oldPdfPath])
-                }
-
-                const safeSupplier = supplier.replace(/[^a-zA-Z0-9.-]/g, '-')
-                const safeInvoiceNumber = invoiceNumber.replace(/[^a-zA-Z0-9.-]/g, '-')
-                const newFilename = `${Date.now()}-${safeSupplier}-${safeInvoiceNumber}.pdf`
-
-                const { data: uploadData, error: uploadError } = await supabase.storage
-                    .from('generated-pdfs')
-                    .upload(newFilename, buffer, { contentType: 'application/pdf', upsert: false })
-
-                if (uploadError) throw new Error(`Failed to upload PDF: ${uploadError.message}`)
-
-                const supplierItemIds = supplierItems.map((item: any) => item.id)
                 const { error: pathUpdateError } = await supabase
                     .from('invoice_items')
-                    .update({ pdf_file_path: uploadData.path })
-                    .in('id', supplierItemIds)
+                    .update({ pdf_file_path: ON_DEMAND_PDF_PATH })
+                    .in('id', storedItems.map((item) => item.id))
                 if (pathUpdateError) throw pathUpdateError
             }
         }
@@ -294,7 +213,7 @@ export async function DELETE(
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const hasAccess = await checkAccess(supabase, user.id, id)
+        const hasAccess = await canAccessInvoice(supabase, user.id, id)
         if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
         await deleteInvoiceHistory(id)

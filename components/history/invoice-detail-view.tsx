@@ -26,7 +26,6 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { downloadFile } from '@/lib/storage/files'
 
 interface InvoiceItem {
     id: string
@@ -66,6 +65,11 @@ function formatCurrency(amount: number): string {
         currency: 'IDR',
         minimumFractionDigits: 0,
     }).format(amount)
+}
+
+function base64ToPdfBlob(base64: string): Blob {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+    return new Blob([bytes], { type: 'application/pdf' })
 }
 
 // Generate a temporary ID for new items (will be replaced by DB id)
@@ -401,34 +405,22 @@ export function InvoiceDetailView({
         }
     }
 
-    // Fetch all generated PDFs from storage
+    // PDF tidak disimpan di storage — server me-render ulang dari data invoice
     const fetchGeneratedPDFs = async () => {
-        const response = await fetch(`/api/invoices/${invoiceId}`)
-        if (!response.ok) throw new Error('Failed to fetch updated invoice')
+        const response = await fetch(`/api/invoices/${invoiceId}/pdfs`)
         const result = await response.json()
-        const latestInvoice = result.data as InvoiceDetail
+        if (!response.ok) throw new Error(result.message || result.error || 'Gagal membuat PDF')
 
-        const supplierPdfMap: Record<string, { supplier: string; invoiceNumber: string; pdfPath: string }> = {}
-        for (const item of latestInvoice.items) {
-            if (!supplierPdfMap[item.supplier] && item.pdf_file_path && item.pdf_file_path !== 'client-side-download' && item.pdf_file_path !== 'pending-regeneration') {
-                supplierPdfMap[item.supplier] = {
-                    supplier: item.supplier,
-                    invoiceNumber: item.invoice_number,
-                    pdfPath: item.pdf_file_path,
-                }
-            }
+        const { batchName, pdfs } = result.data as {
+            batchName: string | null
+            pdfs: { supplier: string; invoiceNumber: string; blob: string }[]
         }
+        if (pdfs.length === 0) throw new Error('Tidak ada PDF yang tersedia')
 
-        const entries = Object.values(supplierPdfMap)
-        if (entries.length === 0) throw new Error('Tidak ada PDF yang tersedia')
-
-        const pdfs: { supplier: string; invoiceNumber: string; blob: Blob }[] = []
-        for (const entry of entries) {
-            const blob = await downloadFile('generated-pdfs', entry.pdfPath)
-            pdfs.push({ supplier: entry.supplier, invoiceNumber: entry.invoiceNumber, blob })
+        return {
+            pdfs: pdfs.map((p) => ({ supplier: p.supplier, invoiceNumber: p.invoiceNumber, blob: base64ToPdfBlob(p.blob) })),
+            batchName,
         }
-
-        return { pdfs, batchName: latestInvoice.batch_name }
     }
 
     // Download option: individual files
@@ -544,53 +536,10 @@ export function InvoiceDetailView({
 
     const suppliers = Object.keys(itemsBySupplier)
 
-    // Fetch all PDFs for batch download
-    const fetchAllPDFs = async (onProgress?: (count: number, total: number) => void) => {
-        if (!invoice) return []
-
-        let completed = 0
-        const total = suppliers.length
-
-        const pdfPromises = suppliers.map(async (supplier) => {
-            const items = itemsBySupplier[supplier]
-            const pdfPath = items[0]?.pdf_file_path
-
-            if (!pdfPath || pdfPath === 'client-side-download') {
-                completed++
-                onProgress?.(completed, total)
-                return null
-            }
-
-            try {
-                const blob = await downloadFile('generated-pdfs', pdfPath)
-                completed++
-                onProgress?.(completed, total)
-                return {
-                    supplier,
-                    invoiceNumber: items[0]?.invoice_number || '',
-                    blob
-                }
-            } catch (error) {
-                console.error(`Error downloading PDF for ${supplier}:`, error)
-                completed++
-                onProgress?.(completed, total)
-                return null
-            }
-        })
-
-        const pdfs = await Promise.all(pdfPromises)
-        return pdfs.filter((pdf): pdf is { supplier: string; invoiceNumber: string; blob: Blob } => pdf !== null)
-    }
-
     const handleDownloadAll = async () => {
         setDownloading(true)
         try {
-            const pdfs = await fetchAllPDFs()
-            if (pdfs.length === 0) {
-                toast.warning('Tidak ada PDF yang tersedia untuk didownload')
-                return
-            }
-
+            const { pdfs } = await fetchGeneratedPDFs()
             const { downloadAllPDFs } = await import('@/lib/pdf/download')
             await downloadAllPDFs(pdfs, invoice?.batch_name || undefined)
         } catch (error) {
@@ -602,32 +551,14 @@ export function InvoiceDetailView({
     }
 
     const handlePreview = async () => {
-        const hasStoredPDFs = suppliers.some(s => {
-            const path = itemsBySupplier[s]?.[0]?.pdf_file_path
-            return path && path !== 'client-side-download'
-        })
-
-        if (!hasStoredPDFs) {
-            toast.warning('PDFs tidak tersedia untuk preview. Invoice ini di-generate dengan metode lama.')
-            return
-        }
-
         setDownloading(true)
-        setLoadingStatus('Preparing...')
+        setLoadingStatus('Membuat PDF...')
         setShowPreview(true)
 
         try {
-            const pdfs = await fetchAllPDFs((c, t) => {
-                setLoadingStatus(`Downloading ${c}/${t}...`)
-            })
-
-            if (pdfs.length > 0) {
-                setLoadingStatus('Opening preview...')
-                setPreviewPDFs(pdfs)
-            } else {
-                toast.warning('Tidak ada PDF yang tersedia di storage untuk invoice ini.')
-                setShowPreview(false)
-            }
+            const { pdfs } = await fetchGeneratedPDFs()
+            setLoadingStatus('Opening preview...')
+            setPreviewPDFs(pdfs)
         } catch (error) {
             console.error('Error fetching PDFs for preview:', error)
             toast.error(`Critical Error: ${(error as Error).message}`)

@@ -57,15 +57,16 @@ flowchart LR
     xlsx[/"Excel RAB"/] --> parse["Browser<br/>parse sheet dan item<br/>(lib/excel)"]
     parse -->|"item per supplier (JSON)"| api["POST /api/generate-pdf<br/>(server Next.js)"]
     api --> render["@react-pdf/renderer<br/>template per supplier<br/>(lib/pdf)"]
-    render -->|PDF| storage[("Supabase Storage<br/>generated-pdfs")]
     api -->|"invoice_history<br/>invoice_items"| db[("Supabase Postgres")]
     render -->|"PDF base64"| preview["Browser<br/>preview, unduh, ZIP, gabung"]
+    db -->|"dibuka dari History"| render
 ```
 
 - **Excel dibaca di browser.** File RAB tidak pernah diunggah. Server hanya menerima item yang sudah dikelompokkan per supplier.
 - **PDF dibuat di server.** `@react-pdf/renderer` dan semua template hanya jalan di server. Browser cuma memuat helper unduh yang ringan.
 - **Satu peta supplier ke template.** `renderSupplierTemplate` dipakai saat generate pertama dan saat PDF dibuat ulang dari riwayat, jadi hasil keduanya selalu sama.
-- **Hemat storage.** Logo, tanda tangan, dan cap disimpan di 300 dpi dari ukuran tampilnya, jadi satu PDF rata-rata sekitar 100 KB.
+- **PDF tidak disimpan di storage.** Yang disimpan cuma data invoice di database. Saat invoice dibuka dari History, PDF-nya dibuat ulang dari data itu, jadi kuota Storage Supabase tidak ikut membengkak.
+- **PDF tetap ringan.** Logo, tanda tangan, dan cap disimpan di 300 dpi dari ukuran tampilnya, jadi satu PDF rata-rata sekitar 100 KB.
 
 ## Mulai lokal
 
