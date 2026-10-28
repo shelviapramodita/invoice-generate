@@ -94,7 +94,7 @@ npm run dev                  # http://localhost:3000 (terminal kedua)
 ```text
 invoice-generate/
 ├── app/                   # halaman (upload, history, admin, auth) dan route API
-├── convex/                # backend: skema, fungsi per area, Convex Auth, impor data lama
+├── convex/                # backend: skema, fungsi per area, Convex Auth
 ├── components/            # komponen UI: excel, invoice, history, auth, ui (shadcn)
 ├── lib/
 │   ├── excel/             # parser workbook dan normalisasi nama item
@@ -103,9 +103,9 @@ invoice-generate/
 ├── data/                  # data resmi supplier: rekening, alamat, warna
 ├── types/                 # tipe bersama
 ├── public/assets/         # logo, tanda tangan, dan cap supplier untuk PDF
-├── scripts/               # cek atribusi AI, kunci Convex Auth, ekspor/impor data Supabase
+├── scripts/               # cek atribusi AI, kunci Convex Auth
 ├── docs/brand/            # logo, ikon, dan panduan pemakaiannya
-├── docs/migrasi-convex.md # panduan migrasi Supabase → Convex
+├── docs/migrasi-convex.md # catatan migrasi Supabase → Convex
 └── CLAUDE.md              # panduan arsitektur dan aturan kerja
 ```
 
