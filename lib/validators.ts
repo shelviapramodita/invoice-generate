@@ -115,8 +115,9 @@ export function normalizeSupplierName(supplierName: string): string {
     const key = collapseRepeatedLetters(normalized)
 
     // Nama lama "CV JAYAMEN"/"JAYAMEN"/"UMKM PURWOTO" sebelum ganti jadi PT
-    // Jayamen Group Mandiri tetap dikenali (backward-compat)
-    if (key.includes('JAYAMEN') || key.includes('PURWOTO')) return 'PT JAYAMEN GROUP MANDIRI'
+    // Jayamen Group Mandiri tetap dikenali (backward-compat). AYAMEN/JAYAME:
+    // typo huruf hilang di sheet ("PT AYAMEN GROUP MANDIRI", "PT JAYAME GROUP MANDIRI")
+    if (key.includes('AYAMEN') || key.includes('JAYAME') || key.includes('PURWOTO')) return 'PT JAYAMEN GROUP MANDIRI'
     // "SUSILO WIDYONO" adalah nama pemilik rekening Nusantara Food (dulu CV
     // Sekar Wijayakusuma) — beberapa sheet Excel nulis nama pemilik ini,
     // bukan nama perusahaannya. Dicek duluan sebelum UNDI/YUWONO karena
@@ -126,13 +127,17 @@ export function normalizeSupplierName(supplierName: string): string {
     if (key.includes('UNDI') || key.includes('YUWONO')) return 'UMKM UNDI YUWONO'
     // "NUSANTARA" (nama baru) dan nama lama "CV SEKAR WIJAYAKUSUMA" (sebelum
     // rebrand) sama-sama dikenali sebagai identitas yang sama
-    if (key.includes('NUSANTARA') || key.includes('SEKAR') || key.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
+    // "NUSATARA": typo huruf N hilang di sheet
+    if (key.includes('NUSANTARA') || key.includes('NUSATARA') || key.includes('SEKAR') || key.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
     // "Waris Ika Pujian" adalah nama pemilik rekening Sri Karya Mukti (per
     // data resmi PT/UMKM) — beberapa sheet Excel mungkin nulis nama pemilik
     // ini, bukan nama usahanya.
     if (key.includes('WARIS') || key.includes('PUJIAN')) return 'SRI KARYA MUKTI'
-    if (key.includes('SRI') || key.includes('KARYA MUKTI')) return 'SRI KARYA MUKTI'
-    if (key.includes('HIDAYAT')) return 'UD HIDAYAT'
+    // "SKM" = singkatan Sri Karya Mukti; dicocokkan persis supaya tidak
+    // nyangkut ke teks lain yang kebetulan mengandung SKM
+    if (key.includes('SRI') || key.includes('KARYA MUKTI') || key === 'SKM') return 'SRI KARYA MUKTI'
+    // "HIDYAT"/"HDIAYAT": typo huruf hilang/tertukar di sheet
+    if (key.includes('HIDAYAT') || key.includes('HIDYAT') || key.includes('HDIAYAT')) return 'UD HIDAYAT'
 
     return supplierName.trim()
 }
