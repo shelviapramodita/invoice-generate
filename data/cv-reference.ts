@@ -24,6 +24,8 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         displayName: 'PT JAYAMEN GROUP MANDIRI',
         themeColor: '#84CC16', // Lime green
         bankAccount: '2106881961',
+        // Rekening lama UMKM Purwoto / CV Jayamen sebelum ganti jadi PT
+        legacyBankAccounts: ['0951810694'],
         bankName: 'BNI',
         address: 'Jl. Puteran Lesmana RT 003 RW 011 Desa/Kelurahan Lesmana, Kec. Ajibarang, Kab. Banyumas, Jawa Tengah 53163',
         category: 'SEMBAKO',
@@ -43,6 +45,8 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         displayName: 'NUSANTARA FOOD',
         themeColor: '#7C3F73', // Purple
         bankAccount: '2106821810',
+        // Rekening lama CV Sekar Wijayakusuma sebelum rebrand jadi Nusantara Food
+        legacyBankAccounts: ['0291155789'],
         bankName: 'BNI',
         address: 'Cihonje, RT 002/012 Desa/Kelurahan Cihonje, Kec. Gumelar, Kab. Banyumas, Jawa Tengah 53165',
         category: 'SAYUR & PROTEIN',
@@ -92,8 +96,9 @@ export function getSupplierConfig(supplierName: string): SupplierConfig | null {
     }
 
     // Legacy: sheet Excel lama masih bisa pakai nama lama "CV JAYAMEN"/"JAYAMEN"/
-    // "UMKM PURWOTO" sebelum ganti nama jadi PT JAYAMEN GROUP MANDIRI
-    if (normalized.includes('JAYAMEN') || normalized.includes('PURWOTO')) {
+    // "UMKM PURWOTO" sebelum ganti nama jadi PT JAYAMEN GROUP MANDIRI.
+    // AYAMEN/JAYAME: typo huruf hilang ("PT AYAMEN ...", "PT JAYAME ...")
+    if (normalized.includes('AYAMEN') || normalized.includes('JAYAME') || normalized.includes('PURWOTO')) {
         return supplierMapping['PT JAYAMEN GROUP MANDIRI']
     }
 

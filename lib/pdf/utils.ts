@@ -141,16 +141,21 @@ function collapseRepeatedLetters(str: string): string {
 
 export function getSupplierTemplateKey(supplier: string): SupplierTemplateKey | null {
     const key = collapseRepeatedLetters(supplier.toUpperCase())
-    if (key.includes('JAYAMEN') || key.includes('PURWOTO')) return 'jayamen'
+    // AYAMEN/JAYAME: typo huruf hilang di sheet ("PT AYAMEN GROUP MANDIRI",
+    // "PT JAYAME GROUP MANDIRI")
+    if (key.includes('AYAMEN') || key.includes('JAYAME') || key.includes('PURWOTO')) return 'jayamen'
     // Dicek duluan sebelum UNDI/YUWONO: beberapa sheet nulis nama ini dengan
     // typo "SUSILO YUWONO" (harusnya "SUSILO WIDYONO"), yang kalau dicek
     // "YUWONO" duluan malah nyasar ke template UMKM Undi Yuwono.
     if (key.includes('SUSILO') || key.includes('WIDYONO') || key.includes('WIDIYONO')) return 'susilo-widyono'
     if (key.includes('UNDI') || key.includes('YUWONO')) return 'undi-yuwono'
-    if (key.includes('NUSANTARA') || key.includes('SEKAR') || key.includes('WIJAYAKUSUMA')) return 'nusantara-food'
+    // "NUSATARA": typo huruf N hilang di sheet
+    if (key.includes('NUSANTARA') || key.includes('NUSATARA') || key.includes('SEKAR') || key.includes('WIJAYAKUSUMA')) return 'nusantara-food'
     // "Waris Ika Pujian" = nama pemilik rekening Sri Karya Mukti
     if (key.includes('WARIS') || key.includes('PUJIAN')) return 'sri-karya-mukti'
-    if (key.includes('SRI') || key.includes('KARYA MUKTI')) return 'sri-karya-mukti'
-    if (key.includes('HIDAYAT')) return 'ud-hidayat'
+    // "SKM" = singkatan Sri Karya Mukti, dicocokkan persis
+    if (key.includes('SRI') || key.includes('KARYA MUKTI') || key.trim() === 'SKM') return 'sri-karya-mukti'
+    // "HIDYAT"/"HDIAYAT": typo huruf hilang/tertukar di sheet
+    if (key.includes('HIDAYAT') || key.includes('HIDYAT') || key.includes('HDIAYAT')) return 'ud-hidayat'
     return null
 }
