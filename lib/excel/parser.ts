@@ -55,6 +55,11 @@ function parseSheetName(name: string, fallbackYear?: number): {
     label: string
     category?: SheetCategory
     tahap?: number
+    // Tahun yang tertulis di nama sheet (undefined kalau tidak ada), dan bulan
+    // dari tanggal yang memakai tahun itu (tanggal akhir untuk range). Dipakai
+    // parseExcelWorkbook untuk menebak tahun sheet yang tidak menulis tahun.
+    explicitYear?: number
+    yearMonth?: number
 } {
     // Detect category from sheet name BEFORE stripping. "OPS GALON" must be checked
     // before standalone "OPS" to avoid matching the prefix and leaving "GALON" behind.
@@ -97,6 +102,7 @@ function parseSheetName(name: string, fallbackYear?: number): {
         const mo2 = ID_MONTHS[m[4].toUpperCase()]
         const yearRaw = m[5] ? parseInt(m[5], 10) : (fallbackYear ?? new Date().getFullYear())
         const year = isPlausibleYear(yearRaw) ? yearRaw : (fallbackYear ?? new Date().getFullYear())
+        const explicitYear = m[5] && isPlausibleYear(yearRaw) ? yearRaw : undefined
         // If first month > second, the range spans year boundary (Dec → Jan)
         const startYear = mo1 > mo2 ? year - 1 : year
         const start = new Date(Date.UTC(startYear, mo1, d1))
@@ -108,6 +114,8 @@ function parseSheetName(name: string, fallbackYear?: number): {
             label: `${d1} ${MONTH_LABELS[mo1]} – ${d2} ${MONTH_LABELS[mo2]} ${year}${tahapSuffix}`,
             category,
             tahap,
+            explicitYear,
+            yearMonth: mo2,
         }
     }
 
@@ -118,6 +126,7 @@ function parseSheetName(name: string, fallbackYear?: number): {
         const mo = ID_MONTHS[m[3].toUpperCase()]
         const yearRaw = m[4] ? parseInt(m[4], 10) : (fallbackYear ?? new Date().getFullYear())
         const year = isPlausibleYear(yearRaw) ? yearRaw : (fallbackYear ?? new Date().getFullYear())
+        const explicitYear = m[4] && isPlausibleYear(yearRaw) ? yearRaw : undefined
         const start = new Date(Date.UTC(year, mo, d1))
         const end = new Date(Date.UTC(year, mo, d2))
         return {
@@ -127,6 +136,8 @@ function parseSheetName(name: string, fallbackYear?: number): {
             label: `${d1}–${d2} ${MONTH_LABELS[mo]} ${year}${tahapSuffix}`,
             category,
             tahap,
+            explicitYear,
+            yearMonth: mo,
         }
     }
 
@@ -136,6 +147,7 @@ function parseSheetName(name: string, fallbackYear?: number): {
         const mo = ID_MONTHS[m[2].toUpperCase()]
         const yearRaw = m[3] ? parseInt(m[3], 10) : (fallbackYear ?? new Date().getFullYear())
         const year = isPlausibleYear(yearRaw) ? yearRaw : (fallbackYear ?? new Date().getFullYear())
+        const explicitYear = m[3] && isPlausibleYear(yearRaw) ? yearRaw : undefined
         const date = new Date(Date.UTC(year, mo, d))
         return {
             type: 'single-day',
@@ -143,6 +155,8 @@ function parseSheetName(name: string, fallbackYear?: number): {
             label: `${d} ${MONTH_LABELS[mo]} ${year}${tahapSuffix}`,
             category,
             tahap,
+            explicitYear,
+            yearMonth: mo,
         }
     }
 
@@ -733,19 +747,44 @@ export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResul
             return { success: false, sheets: [], error: 'File tidak memiliki sheet' }
         }
 
-        // Determine fallback year: median plausible year from any single-day sheet
-        const detectedYears: number[] = []
-        for (const name of workbook.SheetNames) {
-            const meta = parseSheetName(name)
-            if (meta.detectedDate) detectedYears.push(meta.detectedDate.getUTCFullYear())
-            if (meta.dateRangeEnd) detectedYears.push(meta.dateRangeEnd.getUTCFullYear())
-        }
-        const fallbackYear = detectedYears.length > 0
-            ? detectedYears.sort((a, b) => a - b)[Math.floor(detectedYears.length / 2)]
+        const initialMetas = workbook.SheetNames.map(name => parseSheetName(name))
+
+        // Fallback terakhir: median tahun yang tertulis eksplisit di nama sheet
+        const explicitYears = initialMetas
+            .map(m => m.explicitYear)
+            .filter((y): y is number => y !== undefined)
+            .sort((a, b) => a - b)
+        const fallbackYear = explicitYears.length > 0
+            ? explicitYears[Math.floor(explicitYears.length / 2)]
             : new Date().getFullYear()
 
-        const sheets: SheetEntry[] = workbook.SheetNames.map(sheetName => {
-            const meta = parseSheetName(sheetName, fallbackYear)
+        // Sheet tanpa tahun (mis. "9-13 NOV DONE") ditebak dari sheet bertahun
+        // terdekat sesuai urutan di workbook, karena sheet ditambahkan kronologis.
+        // Kalau sheet bertahun berikutnya "8 JAN 2026", maka "9-13 NOV" adalah
+        // Nov 2025, bukan Nov 2026. Tanpa ini sheet lama ikut grup "Nov 2026"
+        // dan bercampur dengan sheet November yang baru.
+        const inferYear = (index: number): number => {
+            const month = initialMetas[index].yearMonth!
+            for (let j = index + 1; j < initialMetas.length; j++) {
+                const next = initialMetas[j]
+                if (next.explicitYear !== undefined && next.yearMonth !== undefined) {
+                    return month > next.yearMonth ? next.explicitYear - 1 : next.explicitYear
+                }
+            }
+            for (let j = index - 1; j >= 0; j--) {
+                const prev = initialMetas[j]
+                if (prev.explicitYear !== undefined && prev.yearMonth !== undefined) {
+                    return month < prev.yearMonth ? prev.explicitYear + 1 : prev.explicitYear
+                }
+            }
+            return fallbackYear
+        }
+
+        const sheets: SheetEntry[] = workbook.SheetNames.map((sheetName, index) => {
+            const initial = initialMetas[index]
+            const meta = initial.type !== 'unparseable' && initial.explicitYear === undefined
+                ? parseSheetName(sheetName, inferYear(index))
+                : initial
             const ws = workbook.Sheets[sheetName]
 
             if (!ws || !ws['!ref']) {
