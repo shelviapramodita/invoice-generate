@@ -67,7 +67,10 @@ export const supplierMapping: Record<string, SupplierConfig> = {
         name: 'SRI KARYA MUKTI',
         displayName: 'SRI KARYA MUKTI',
         themeColor: '#EA580C', // Orange
-        bankAccount: '2003608397',
+        // Rekening BNI a.n. Riswo Sujarwo (sejak 2026-11-11)
+        bankAccount: '2143138737',
+        // Rekening lama a.n. Waris Ika Pujian
+        legacyBankAccounts: ['2003608397'],
         bankName: 'BNI',
         address: 'Cihonje RT 3 RW 11, Desa/Kelurahan Cihonje, Kec. Gumelar, Kab. Banyumas, Provinsi Jawa Tengah. Kode Pos 53165',
     },
@@ -108,9 +111,10 @@ export function getSupplierConfig(supplierName: string): SupplierConfig | null {
         return supplierMapping['NUSANTARA FOOD']
     }
 
-    // "Waris Ika Pujian" adalah nama pemilik rekening Sri Karya Mukti (per
-    // data resmi PT/UMKM), beberapa sheet Excel mungkin nulis nama ini
-    if (normalized.includes('WARIS') || normalized.includes('PUJIAN')) {
+    // "Riswo Sujarwo" adalah nama pemilik rekening Sri Karya Mukti sekarang,
+    // "Waris Ika Pujian" pemilik rekening lama; beberapa sheet Excel mungkin
+    // nulis nama pemilik ini, bukan nama usahanya
+    if (normalized.includes('RISWO') || normalized.includes('SUJARWO') || normalized.includes('WARIS') || normalized.includes('PUJIAN')) {
         return supplierMapping['SRI KARYA MUKTI']
     }
 

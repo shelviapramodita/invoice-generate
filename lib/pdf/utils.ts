@@ -151,8 +151,8 @@ export function getSupplierTemplateKey(supplier: string): SupplierTemplateKey | 
     if (key.includes('UNDI') || key.includes('YUWONO')) return 'undi-yuwono'
     // "NUSATARA": typo huruf N hilang di sheet
     if (key.includes('NUSANTARA') || key.includes('NUSATARA') || key.includes('SEKAR') || key.includes('WIJAYAKUSUMA')) return 'nusantara-food'
-    // "Waris Ika Pujian" = nama pemilik rekening Sri Karya Mukti
-    if (key.includes('WARIS') || key.includes('PUJIAN')) return 'sri-karya-mukti'
+    // "Riswo Sujarwo" (sekarang) / "Waris Ika Pujian" (lama) = pemilik rekening Sri Karya Mukti
+    if (key.includes('RISWO') || key.includes('SUJARWO') || key.includes('WARIS') || key.includes('PUJIAN')) return 'sri-karya-mukti'
     // "SKM" = singkatan Sri Karya Mukti, dicocokkan persis
     if (key.includes('SRI') || key.includes('KARYA MUKTI') || key.trim() === 'SKM') return 'sri-karya-mukti'
     // "HIDYAT"/"HDIAYAT": typo huruf hilang/tertukar di sheet

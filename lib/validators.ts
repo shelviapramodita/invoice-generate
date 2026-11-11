@@ -129,10 +129,10 @@ export function normalizeSupplierName(supplierName: string): string {
     // rebrand) sama-sama dikenali sebagai identitas yang sama
     // "NUSATARA": typo huruf N hilang di sheet
     if (key.includes('NUSANTARA') || key.includes('NUSATARA') || key.includes('SEKAR') || key.includes('WIJAYAKUSUMA')) return 'NUSANTARA FOOD'
-    // "Waris Ika Pujian" adalah nama pemilik rekening Sri Karya Mukti (per
-    // data resmi PT/UMKM) — beberapa sheet Excel mungkin nulis nama pemilik
-    // ini, bukan nama usahanya.
-    if (key.includes('WARIS') || key.includes('PUJIAN')) return 'SRI KARYA MUKTI'
+    // "Riswo Sujarwo" (pemilik rekening sekarang) dan "Waris Ika Pujian"
+    // (pemilik rekening lama) adalah pemilik rekening Sri Karya Mukti —
+    // beberapa sheet Excel mungkin nulis nama pemilik ini, bukan nama usahanya.
+    if (key.includes('RISWO') || key.includes('SUJARWO') || key.includes('WARIS') || key.includes('PUJIAN')) return 'SRI KARYA MUKTI'
     // "SKM" = singkatan Sri Karya Mukti; dicocokkan persis supaya tidak
     // nyangkut ke teks lain yang kebetulan mengandung SKM
     if (key.includes('SRI') || key.includes('KARYA MUKTI') || key === 'SKM') return 'SRI KARYA MUKTI'
