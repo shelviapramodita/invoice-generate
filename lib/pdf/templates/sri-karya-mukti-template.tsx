@@ -321,7 +321,6 @@ export function SriKaryaMuktiTemplate({
                     <View style={styles.paymentInfo}>
                         <Text style={styles.paymentLabel}>INFO PEMBAYARAN</Text>
                         <Text>BNI - 2143138737</Text>
-                        <Text>a.n. Riswo Sujarwo</Text>
                     </View>
 
                     <View style={styles.signatureSection}>
