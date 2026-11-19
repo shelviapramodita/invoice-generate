@@ -84,6 +84,12 @@ const LEGIT_TIDAK_WORDS = new Set([
     'kupas', 'dikupas', 'kupasan',
 ])
 
+// Words after "non" that make a product variant, not a quality note, so the
+// "non" is kept as-is (e.g. "Semangka Merah Non Biji" = seedless watermelon).
+// Without this, "non biji" would become "tidak biji" and get stripped as noise.
+const KEEP_NON_WORDS = ['biji']
+const KEEP_NON_ALT = KEEP_NON_WORDS.join('|')
+
 // Standalone quality words that on their own indicate a noise note.
 const NOISE_STANDALONE_WORDS = new Set([
     'bagus', 'matang', 'manis', 'segar', 'baik', 'fresh',
@@ -294,8 +300,10 @@ export function normalizeItemName(raw: string): string {
     //    - Attached typo: "Bawang Merah Nonkupas" → "Bawang Merah tidak kupas"
     //    Done first so any "non bonyok" gets normalized to "tidak bonyok" before
     //    the noise-stripping step below picks it up.
-    s = s.replace(/\bnon([a-z]+)\b/gi, 'tidak $1')
-    s = s.replace(/\bnon\b/gi, 'tidak')
+    //    Exception: KEEP_NON_WORDS ("Non Biji", "nonbiji") stay "non <word>".
+    s = s.replace(new RegExp(`\\bnon\\s*(${KEEP_NON_ALT})\\b`, 'gi'), 'non $1')
+    s = s.replace(new RegExp(`\\bnon(?!(?:${KEEP_NON_ALT})\\b)([a-z]+)\\b`, 'gi'), 'tidak $1')
+    s = s.replace(new RegExp(`\\bnon\\b(?!\\s+(?:${KEEP_NON_ALT})\\b)`, 'gi'), 'tidak')
 
     // 1b. Vocabulary normalization (colloquial → formal Indonesian).
     //    "cabe" → "cabai", "ijo" → "hijau", etc.
